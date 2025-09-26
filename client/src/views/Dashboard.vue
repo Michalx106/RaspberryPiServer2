@@ -418,20 +418,32 @@ const renderChart = () => {
   const existingLabels = chartInstance.value.data.labels
   existingLabels.splice(0, existingLabels.length, ...chartData.labels)
 
-  chartInstance.value.data.datasets = chartData.datasets.map((dataset, index) => {
-    const existingDataset = chartInstance.value?.data?.datasets?.[index]
+  const existingDatasets = chartInstance.value.data.datasets
 
-    return {
-      ...dataset,
-      data: [...dataset.data],
-      hidden:
-        typeof existingDataset?.hidden === 'boolean'
-          ? existingDataset.hidden
-          : undefined,
+  chartData.datasets.forEach((dataset, index) => {
+    const existingDataset = existingDatasets[index]
+
+    if (!existingDataset) {
+      existingDatasets.push({ ...dataset, data: [...dataset.data] })
+      return
     }
+
+    existingDataset.label = dataset.label
+    existingDataset.borderColor = dataset.borderColor
+    existingDataset.backgroundColor = dataset.backgroundColor
+    existingDataset.fill = dataset.fill
+    existingDataset.tension = dataset.tension
+    existingDataset.pointRadius = dataset.pointRadius
+    existingDataset.pointHoverRadius = dataset.pointHoverRadius
+
+    existingDataset.data.splice(0, existingDataset.data.length, ...dataset.data)
   })
 
-  chartInstance.value.update()
+  if (existingDatasets.length > chartData.datasets.length) {
+    existingDatasets.splice(chartData.datasets.length)
+  }
+
+  chartInstance.value.update('none')
 }
 
 onMounted(async () => {
