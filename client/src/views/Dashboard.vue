@@ -84,6 +84,8 @@ const metricCards = computed(() => [
   },
 ])
 
+const REFRESH_INTERVAL_MS = 1000
+
 let currentIntervalId
 let historyIntervalId
 
@@ -266,8 +268,8 @@ onMounted(async () => {
   await Promise.all([fetchHistoryMetrics(), fetchCurrentMetrics()])
   renderChart()
 
-  currentIntervalId = window.setInterval(fetchCurrentMetrics, 5000)
-  historyIntervalId = window.setInterval(fetchHistoryMetrics, 30000)
+  currentIntervalId = window.setInterval(fetchCurrentMetrics, REFRESH_INTERVAL_MS)
+  historyIntervalId = window.setInterval(fetchHistoryMetrics, REFRESH_INTERVAL_MS)
 })
 
 onBeforeUnmount(() => {
