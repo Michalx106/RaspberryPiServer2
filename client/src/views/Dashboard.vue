@@ -60,8 +60,10 @@ const historyMetrics = ref([])
 
 const lastUpdated = computed(() => {
   if (!historyMetrics.value.length) return ''
-  const date = new Date(historyMetrics.value.at(-1).timestamp)
-  return date.toLocaleString()
+  const lastEntry = historyMetrics.value.at(-1)
+  if (!lastEntry?.timestamp) return ''
+  const date = new Date(lastEntry.timestamp)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString()
 })
 
 const metricCards = computed(() => [
@@ -85,10 +87,73 @@ const metricCards = computed(() => [
 let currentIntervalId
 let historyIntervalId
 
+const toFiniteNumber = (value) => {
+  const numberValue = typeof value === 'string' ? Number.parseFloat(value) : value
+  return Number.isFinite(numberValue) ? numberValue : null
+}
+
+const mapCurrentMetrics = (data) => {
+  if (!data || typeof data !== 'object') {
+    return {
+      cpu: null,
+      memory: null,
+      temperature: null,
+      timestamp: null,
+    }
+  }
+
+  const cpuLoad = toFiniteNumber(data?.cpu?.load)
+  const memoryUsed = toFiniteNumber(data?.memory?.used)
+  const memoryTotal = toFiniteNumber(data?.memory?.total)
+  const memoryPercent =
+    memoryUsed !== null && memoryTotal !== null && memoryTotal !== 0
+      ? (memoryUsed / memoryTotal) * 100
+      : null
+
+  const temperatureMain = toFiniteNumber(data?.temperature?.main)
+  const temperatureMax = toFiniteNumber(data?.temperature?.max)
+
+  return {
+    cpu: cpuLoad,
+    memory: memoryPercent,
+    temperature: temperatureMain ?? temperatureMax,
+    timestamp: data?.timestamp ?? null,
+  }
+}
+
+const mapHistorySample = (sample) => {
+  if (!sample || typeof sample !== 'object') {
+    return {
+      timestamp: null,
+      cpu: null,
+      memory: null,
+      temperature: null,
+    }
+  }
+
+  const cpuLoad = toFiniteNumber(sample?.cpu?.load)
+  const memoryUsed = toFiniteNumber(sample?.memory?.used)
+  const memoryTotal = toFiniteNumber(sample?.memory?.total)
+  const memoryPercent =
+    memoryUsed !== null && memoryTotal !== null && memoryTotal !== 0
+      ? (memoryUsed / memoryTotal) * 100
+      : null
+
+  const temperatureMain = toFiniteNumber(sample?.temperature?.main)
+  const temperatureMax = toFiniteNumber(sample?.temperature?.max)
+
+  return {
+    timestamp: sample?.timestamp ?? null,
+    cpu: cpuLoad,
+    memory: memoryPercent,
+    temperature: temperatureMain ?? temperatureMax,
+  }
+}
+
 const fetchCurrentMetrics = async () => {
   try {
     const { data } = await axios.get('/api/metrics/current')
-    currentMetrics.value = data
+    currentMetrics.value = mapCurrentMetrics(data)
     errorMessage.value = ''
   } catch (error) {
     console.error('Failed to fetch current metrics', error)
@@ -99,7 +164,9 @@ const fetchCurrentMetrics = async () => {
 const fetchHistoryMetrics = async () => {
   try {
     const { data } = await axios.get('/api/metrics/history')
-    historyMetrics.value = Array.isArray(data) ? data : []
+    historyMetrics.value = Array.isArray(data?.samples)
+      ? data.samples.map((sample) => mapHistorySample(sample))
+      : []
     errorMessage.value = ''
   } catch (error) {
     console.error('Failed to fetch history metrics', error)
@@ -109,7 +176,9 @@ const fetchHistoryMetrics = async () => {
 
 const buildDataset = (label, key, color) => ({
   label,
-  data: historyMetrics.value.map((entry) => entry[key]),
+  data: historyMetrics.value.map((entry) =>
+    Number.isFinite(entry?.[key]) ? entry[key] : null
+  ),
   fill: true,
   tension: 0.35,
   borderColor: color,
@@ -124,8 +193,11 @@ const renderChart = () => {
 
   const chartData = {
     labels: historyMetrics.value.map((entry) => {
+      if (!entry?.timestamp) return '—'
       const date = new Date(entry.timestamp)
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      return Number.isNaN(date.getTime())
+        ? '—'
+        : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }),
     datasets: [
       buildDataset('CPU Usage (%)', 'cpu', '#0ea5e9'),
@@ -172,7 +244,13 @@ const renderChart = () => {
         },
         tooltip: {
           callbacks: {
-            label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(1)}`,
+            label: (context) => {
+              const value = context.parsed?.y
+              if (!Number.isFinite(value)) {
+                return `${context.dataset.label}: --`
+              }
+              return `${context.dataset.label}: ${value.toFixed(1)}`
+            },
           },
         },
       },
