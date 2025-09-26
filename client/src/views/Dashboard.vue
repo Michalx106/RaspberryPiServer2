@@ -19,11 +19,13 @@
         <p v-if="lastUpdated">Last updated: {{ lastUpdated }}</p>
         <p v-else>Waiting for historical data…</p>
       </header>
-      <canvas
-        ref="chartCanvas"
-        aria-label="Line chart showing CPU, Memory, and Temperature history"
-        role="img"
-      ></canvas>
+      <div class="chart-wrapper">
+        <canvas
+          ref="chartCanvas"
+          aria-label="Line chart showing CPU, Memory, and Temperature history"
+          role="img"
+        ></canvas>
+      </div>
     </section>
 
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
@@ -31,7 +33,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import {
   CategoryScale,
@@ -68,6 +70,14 @@ const currentMetrics = ref({
   timestamp: null,
 })
 const historyMetrics = ref([])
+
+watch(
+  historyMetrics,
+  () => {
+    renderChart()
+  },
+  { deep: true }
+)
 
 const SCROLL_STORAGE_KEY = 'dashboard-scroll-position'
 let scrollSaveFrame = null
@@ -192,28 +202,32 @@ const metricCards = computed(() => [
 
 const REFRESH_INTERVAL_MS = 1000
 
-let stopCurrentPolling
-let stopHistoryPolling
+let stopPollingLoop
 
 const startPolling = (fetcher) => {
-  let timeoutId
+  let timeoutId = null
   let stopped = false
+  let inFlight = false
 
   const run = async () => {
+    if (stopped || inFlight) return
+
+    inFlight = true
     try {
       await fetcher()
     } finally {
+      inFlight = false
       if (!stopped) {
         timeoutId = window.setTimeout(run, REFRESH_INTERVAL_MS)
       }
     }
   }
 
-  timeoutId = window.setTimeout(run, REFRESH_INTERVAL_MS)
+  run()
 
   return () => {
     stopped = true
-    if (timeoutId) {
+    if (timeoutId !== null) {
       window.clearTimeout(timeoutId)
     }
   }
@@ -283,27 +297,39 @@ const mapHistorySample = (sample) => {
 }
 
 const fetchCurrentMetrics = async () => {
-  try {
-    const { data } = await axios.get('/api/metrics/current')
-    currentMetrics.value = mapCurrentMetrics(data)
-    errorMessage.value = ''
-  } catch (error) {
-    console.error('Failed to fetch current metrics', error)
-    errorMessage.value = 'Unable to refresh current metrics.'
-  }
+  const { data } = await axios.get('/api/metrics/current')
+  currentMetrics.value = mapCurrentMetrics(data)
 }
 
 const fetchHistoryMetrics = async () => {
-  try {
-    const { data } = await axios.get('/api/metrics/history')
-    historyMetrics.value = Array.isArray(data?.samples)
-      ? data.samples.map((sample) => mapHistorySample(sample))
-      : []
-    errorMessage.value = ''
-  } catch (error) {
-    console.error('Failed to fetch history metrics', error)
-    errorMessage.value = 'Unable to refresh historical metrics.'
+  const { data } = await axios.get('/api/metrics/history')
+  historyMetrics.value = Array.isArray(data?.samples)
+    ? data.samples.map((sample) => mapHistorySample(sample))
+    : []
+}
+
+const refreshAllMetrics = async () => {
+  const [currentResult, historyResult] = await Promise.allSettled([
+    fetchCurrentMetrics(),
+    fetchHistoryMetrics(),
+  ])
+
+  let encounteredError = false
+
+  if (currentResult.status === 'rejected') {
+    encounteredError = true
+    console.error('Failed to fetch current metrics', currentResult.reason)
   }
+
+  if (historyResult.status === 'rejected') {
+    encounteredError = true
+    console.error('Failed to fetch history metrics', historyResult.reason)
+  }
+
+  errorMessage.value = encounteredError ? 'Unable to refresh some metrics.' : ''
+
+  // Chart updates are driven by the historyMetrics watcher so we don't
+  // duplicate renders here.
 }
 
 const buildDataset = (label, key, color) => ({
@@ -321,7 +347,6 @@ const buildDataset = (label, key, color) => ({
 
 const renderChart = () => {
   if (!chartCanvas.value) return
-  const ctx = chartCanvas.value.getContext('2d')
 
   const chartData = {
     labels: historyMetrics.value.map((entry) => {
@@ -338,55 +363,87 @@ const renderChart = () => {
     ],
   }
 
-  if (chartInstance.value) {
-    chartInstance.value.destroy()
-    chartInstance.value = null
-  }
-
-  chartInstance.value = new Chart(ctx, {
-    type: 'line',
-    data: chartData,
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: 'index',
-        intersect: false,
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: 'Value',
+  if (!chartInstance.value) {
+    const ctx = chartCanvas.value.getContext('2d')
+    chartInstance.value = new Chart(ctx, {
+      type: 'line',
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 0,
+        },
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Value',
+            },
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Time',
+            },
           },
         },
-        x: {
-          title: {
+        plugins: {
+          legend: {
             display: true,
-            text: 'Time',
+            position: 'bottom',
           },
-        },
-      },
-      plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-        },
-        tooltip: {
-          callbacks: {
-            label: (context) => {
-              const value = context.parsed?.y
-              if (!Number.isFinite(value)) {
-                return `${context.dataset.label}: --`
-              }
-              return `${context.dataset.label}: ${value.toFixed(1)}`
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const value = context.parsed?.y
+                if (!Number.isFinite(value)) {
+                  return `${context.dataset.label}: --`
+                }
+                return `${context.dataset.label}: ${value.toFixed(1)}`
+              },
             },
           },
         },
       },
-    },
+    })
+    return
+  }
+
+  const existingLabels = chartInstance.value.data.labels
+  existingLabels.splice(0, existingLabels.length, ...chartData.labels)
+
+  const existingDatasets = chartInstance.value.data.datasets
+
+  chartData.datasets.forEach((dataset, index) => {
+    const existingDataset = existingDatasets[index]
+
+    if (!existingDataset) {
+      existingDatasets.push({ ...dataset, data: [...dataset.data] })
+      return
+    }
+
+    existingDataset.label = dataset.label
+    existingDataset.borderColor = dataset.borderColor
+    existingDataset.backgroundColor = dataset.backgroundColor
+    existingDataset.fill = dataset.fill
+    existingDataset.tension = dataset.tension
+    existingDataset.pointRadius = dataset.pointRadius
+    existingDataset.pointHoverRadius = dataset.pointHoverRadius
+
+    existingDataset.data.splice(0, existingDataset.data.length, ...dataset.data)
   })
+
+  if (existingDatasets.length > chartData.datasets.length) {
+    existingDatasets.splice(chartData.datasets.length)
+  }
+
+  chartInstance.value.update('none')
 }
 
 onMounted(async () => {
@@ -394,21 +451,14 @@ onMounted(async () => {
     window.addEventListener('scroll', handleScroll, { passive: true })
   }
 
-  await Promise.all([fetchHistoryMetrics(), fetchCurrentMetrics()])
-  renderChart()
+  await refreshAllMetrics()
 
   await nextTick()
   restoreScrollPosition()
 
-  stopCurrentPolling = startPolling(() =>
+  stopPollingLoop = startPolling(() =>
     withScrollPreserved(async () => {
-      await fetchCurrentMetrics()
-    })
-  )
-  stopHistoryPolling = startPolling(() =>
-    withScrollPreserved(async () => {
-      await fetchHistoryMetrics()
-      renderChart()
+      await refreshAllMetrics()
     })
   )
 })
@@ -423,8 +473,7 @@ onBeforeUnmount(() => {
     saveScrollPosition()
   }
 
-  if (stopCurrentPolling) stopCurrentPolling()
-  if (stopHistoryPolling) stopHistoryPolling()
+  if (stopPollingLoop) stopPollingLoop()
   if (chartInstance.value) {
     chartInstance.value.destroy()
     chartInstance.value = null
@@ -508,8 +557,18 @@ h1 {
   font-size: 0.9rem;
 }
 
-.chart-section canvas {
+.chart-wrapper {
+  position: relative;
   flex: 1;
+  min-height: 320px;
+  height: clamp(260px, 45vh, 420px);
+}
+
+.chart-section canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .error {
