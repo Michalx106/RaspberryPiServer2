@@ -31,14 +31,13 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import {
   CategoryScale,
   Chart,
   Filler,
   Legend,
-  LineController,
   LineElement,
   LinearScale,
   PointElement,
@@ -46,17 +45,7 @@ import {
   Tooltip,
 } from 'chart.js'
 
-Chart.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineController,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-)
+Chart.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
 const chartCanvas = ref(null)
 const chartInstance = ref(null)
@@ -244,8 +233,9 @@ const renderChart = () => {
   }
 
   if (chartInstance.value) {
-    chartInstance.value.destroy()
-    chartInstance.value = null
+    chartInstance.value.data = chartData
+    chartInstance.value.update()
+    return
   }
 
   chartInstance.value = new Chart(ctx, {
@@ -293,6 +283,10 @@ const renderChart = () => {
     },
   })
 }
+
+watch(historyMetrics, () => {
+  renderChart()
+})
 
 onMounted(async () => {
   await Promise.all([fetchHistoryMetrics(), fetchCurrentMetrics()])
