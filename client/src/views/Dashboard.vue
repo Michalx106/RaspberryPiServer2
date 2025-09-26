@@ -19,11 +19,13 @@
         <p v-if="lastUpdated">Last updated: {{ lastUpdated }}</p>
         <p v-else>Waiting for historical data…</p>
       </header>
-      <canvas
-        ref="chartCanvas"
-        aria-label="Line chart showing CPU, Memory, and Temperature history"
-        role="img"
-      ></canvas>
+      <div class="chart-wrapper">
+        <canvas
+          ref="chartCanvas"
+          aria-label="Line chart showing CPU, Memory, and Temperature history"
+          role="img"
+        ></canvas>
+      </div>
     </section>
 
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
@@ -321,7 +323,6 @@ const buildDataset = (label, key, color) => ({
 
 const renderChart = () => {
   if (!chartCanvas.value) return
-  const ctx = chartCanvas.value.getContext('2d')
 
   const chartData = {
     labels: historyMetrics.value.map((entry) => {
@@ -338,55 +339,62 @@ const renderChart = () => {
     ],
   }
 
-  if (chartInstance.value) {
-    chartInstance.value.destroy()
-    chartInstance.value = null
-  }
-
-  chartInstance.value = new Chart(ctx, {
-    type: 'line',
-    data: chartData,
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: 'index',
-        intersect: false,
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: 'Value',
+  if (!chartInstance.value) {
+    const ctx = chartCanvas.value.getContext('2d')
+    chartInstance.value = new Chart(ctx, {
+      type: 'line',
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 0,
+        },
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Value',
+            },
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Time',
+            },
           },
         },
-        x: {
-          title: {
+        plugins: {
+          legend: {
             display: true,
-            text: 'Time',
+            position: 'bottom',
           },
-        },
-      },
-      plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-        },
-        tooltip: {
-          callbacks: {
-            label: (context) => {
-              const value = context.parsed?.y
-              if (!Number.isFinite(value)) {
-                return `${context.dataset.label}: --`
-              }
-              return `${context.dataset.label}: ${value.toFixed(1)}`
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const value = context.parsed?.y
+                if (!Number.isFinite(value)) {
+                  return `${context.dataset.label}: --`
+                }
+                return `${context.dataset.label}: ${value.toFixed(1)}`
+              },
             },
           },
         },
       },
-    },
-  })
+    })
+    return
+  }
+
+  chartInstance.value.data.labels = chartData.labels
+  chartInstance.value.data.datasets = chartData.datasets
+  chartInstance.value.resize()
+  chartInstance.value.update('none')
 }
 
 onMounted(async () => {
@@ -508,8 +516,18 @@ h1 {
   font-size: 0.9rem;
 }
 
-.chart-section canvas {
+.chart-wrapper {
+  position: relative;
   flex: 1;
+  min-height: 320px;
+  height: clamp(260px, 45vh, 420px);
+}
+
+.chart-section canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .error {
