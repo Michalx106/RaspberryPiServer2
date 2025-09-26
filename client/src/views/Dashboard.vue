@@ -33,7 +33,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import {
   CategoryScale,
@@ -391,32 +391,24 @@ const renderChart = () => {
     return
   }
 
-  const existingLabels = chartInstance.value.data.labels
-  existingLabels.splice(0, existingLabels.length, ...chartData.labels)
+  chartInstance.value.data.labels = chartData.labels
 
   chartData.datasets.forEach((dataset, index) => {
-    const existingDataset = chartInstance.value.data.datasets[index]
+    if (!chartInstance.value) return
 
-    if (!existingDataset) {
+    if (!chartInstance.value.data.datasets[index]) {
       chartInstance.value.data.datasets[index] = { ...dataset }
       return
     }
 
-    existingDataset.data.splice(0, existingDataset.data.length, ...dataset.data)
-    existingDataset.label = dataset.label
-    existingDataset.borderColor = dataset.borderColor
-    existingDataset.backgroundColor = dataset.backgroundColor
-    existingDataset.fill = dataset.fill
-    existingDataset.tension = dataset.tension
-    existingDataset.pointRadius = dataset.pointRadius
-    existingDataset.pointHoverRadius = dataset.pointHoverRadius
+    chartInstance.value.data.datasets[index] = {
+      ...chartInstance.value.data.datasets[index],
+      ...dataset,
+    }
   })
 
   if (chartInstance.value.data.datasets.length > chartData.datasets.length) {
-    chartInstance.value.data.datasets.splice(
-      chartData.datasets.length,
-      chartInstance.value.data.datasets.length - chartData.datasets.length
-    )
+    chartInstance.value.data.datasets.splice(chartData.datasets.length)
   }
 
   chartInstance.value.update('none')
@@ -445,6 +437,14 @@ onMounted(async () => {
     })
   )
 })
+
+watch(
+  historyMetrics,
+  () => {
+    renderChart()
+  },
+  { deep: true }
+)
 
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
