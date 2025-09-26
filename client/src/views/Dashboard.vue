@@ -198,10 +198,12 @@ let stopCurrentPolling
 let stopHistoryPolling
 
 const startPolling = (fetcher) => {
-  let timeoutId
+  let timeoutId = null
   let stopped = false
 
   const run = async () => {
+    if (stopped) return
+
     try {
       await fetcher()
     } finally {
@@ -211,11 +213,11 @@ const startPolling = (fetcher) => {
     }
   }
 
-  timeoutId = window.setTimeout(run, REFRESH_INTERVAL_MS)
+  run()
 
   return () => {
     stopped = true
-    if (timeoutId) {
+    if (timeoutId !== null) {
       window.clearTimeout(timeoutId)
     }
   }
@@ -321,6 +323,13 @@ const buildDataset = (label, key, color) => ({
   pointHoverRadius: 5,
 })
 
+const syncArrayValues = (target, source) => {
+  target.splice(source.length)
+  source.forEach((value, index) => {
+    target[index] = value
+  })
+}
+
 const renderChart = () => {
   if (!chartCanvas.value) return
 
@@ -391,20 +400,28 @@ const renderChart = () => {
     return
   }
 
-  chartInstance.value.data.labels = chartData.labels
+  syncArrayValues(chartInstance.value.data.labels, chartData.labels)
 
   chartData.datasets.forEach((dataset, index) => {
     if (!chartInstance.value) return
 
     if (!chartInstance.value.data.datasets[index]) {
-      chartInstance.value.data.datasets[index] = { ...dataset }
+      chartInstance.value.data.datasets[index] = {
+        ...dataset,
+        data: [...dataset.data],
+      }
       return
     }
 
-    chartInstance.value.data.datasets[index] = {
-      ...chartInstance.value.data.datasets[index],
-      ...dataset,
-    }
+    const targetDataset = chartInstance.value.data.datasets[index]
+    targetDataset.label = dataset.label
+    targetDataset.fill = dataset.fill
+    targetDataset.tension = dataset.tension
+    targetDataset.borderColor = dataset.borderColor
+    targetDataset.backgroundColor = dataset.backgroundColor
+    targetDataset.pointRadius = dataset.pointRadius
+    targetDataset.pointHoverRadius = dataset.pointHoverRadius
+    syncArrayValues(targetDataset.data, dataset.data)
   })
 
   if (chartInstance.value.data.datasets.length > chartData.datasets.length) {
