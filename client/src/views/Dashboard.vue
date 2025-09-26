@@ -33,7 +33,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import {
   CategoryScale,
@@ -70,6 +70,14 @@ const currentMetrics = ref({
   timestamp: null,
 })
 const historyMetrics = ref([])
+
+watch(
+  historyMetrics,
+  () => {
+    renderChart()
+  },
+  { deep: true }
+)
 
 const SCROLL_STORAGE_KEY = 'dashboard-scroll-position'
 let scrollSaveFrame = null
@@ -320,9 +328,8 @@ const refreshAllMetrics = async () => {
 
   errorMessage.value = encounteredError ? 'Unable to refresh some metrics.' : ''
 
-  if (historyResult.status === 'fulfilled') {
-    renderChart()
-  }
+  // Chart updates are driven by the historyMetrics watcher so we don't
+  // duplicate renders here.
 }
 
 const buildDataset = (label, key, color) => ({
@@ -337,13 +344,6 @@ const buildDataset = (label, key, color) => ({
   pointRadius: 3,
   pointHoverRadius: 5,
 })
-
-const syncArrayValues = (target, source) => {
-  target.splice(source.length)
-  source.forEach((value, index) => {
-    target[index] = value
-  })
-}
 
 const renderChart = () => {
   if (!chartCanvas.value) return
@@ -415,35 +415,23 @@ const renderChart = () => {
     return
   }
 
-  syncArrayValues(chartInstance.value.data.labels, chartData.labels)
+  const existingLabels = chartInstance.value.data.labels
+  existingLabels.splice(0, existingLabels.length, ...chartData.labels)
 
-  chartData.datasets.forEach((dataset, index) => {
-    if (!chartInstance.value) return
+  chartInstance.value.data.datasets = chartData.datasets.map((dataset, index) => {
+    const existingDataset = chartInstance.value?.data?.datasets?.[index]
 
-    if (!chartInstance.value.data.datasets[index]) {
-      chartInstance.value.data.datasets[index] = {
-        ...dataset,
-        data: [...dataset.data],
-      }
-      return
+    return {
+      ...dataset,
+      data: [...dataset.data],
+      hidden:
+        typeof existingDataset?.hidden === 'boolean'
+          ? existingDataset.hidden
+          : undefined,
     }
-
-    const targetDataset = chartInstance.value.data.datasets[index]
-    targetDataset.label = dataset.label
-    targetDataset.fill = dataset.fill
-    targetDataset.tension = dataset.tension
-    targetDataset.borderColor = dataset.borderColor
-    targetDataset.backgroundColor = dataset.backgroundColor
-    targetDataset.pointRadius = dataset.pointRadius
-    targetDataset.pointHoverRadius = dataset.pointHoverRadius
-    syncArrayValues(targetDataset.data, dataset.data)
   })
 
-  if (chartInstance.value.data.datasets.length > chartData.datasets.length) {
-    chartInstance.value.data.datasets.splice(chartData.datasets.length)
-  }
-
-  chartInstance.value.update('none')
+  chartInstance.value.update()
 }
 
 onMounted(async () => {
