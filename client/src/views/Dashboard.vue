@@ -31,7 +31,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import axios from 'axios'
 import {
   CategoryScale,
@@ -68,6 +68,54 @@ const currentMetrics = ref({
   timestamp: null,
 })
 const historyMetrics = ref([])
+
+const SCROLL_STORAGE_KEY = 'dashboard-scroll-position'
+let scrollSaveFrame = null
+
+const readStoredScrollPosition = () => {
+  if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+    return null
+  }
+
+  const storedValue = sessionStorage.getItem(SCROLL_STORAGE_KEY)
+  if (!storedValue) return null
+
+  const parsedValue = Number.parseInt(storedValue, 10)
+  return Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : null
+}
+
+const saveScrollPosition = () => {
+  if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+    return
+  }
+
+  sessionStorage.setItem(
+    SCROLL_STORAGE_KEY,
+    String(Math.max(0, Math.round(window.scrollY ?? window.pageYOffset ?? 0)))
+  )
+}
+
+const handleScroll = () => {
+  if (typeof window === 'undefined') return
+
+  if (scrollSaveFrame !== null) {
+    window.cancelAnimationFrame(scrollSaveFrame)
+  }
+
+  scrollSaveFrame = window.requestAnimationFrame(() => {
+    scrollSaveFrame = null
+    saveScrollPosition()
+  })
+}
+
+const restoreScrollPosition = () => {
+  if (typeof window === 'undefined') return
+
+  const savedPosition = readStoredScrollPosition()
+  if (savedPosition === null) return
+
+  window.scrollTo({ top: savedPosition, behavior: 'auto' })
+}
 
 const lastUpdated = computed(() => {
   if (!historyMetrics.value.length) return ''
@@ -295,8 +343,15 @@ const renderChart = () => {
 }
 
 onMounted(async () => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('scroll', handleScroll, { passive: true })
+  }
+
   await Promise.all([fetchHistoryMetrics(), fetchCurrentMetrics()])
   renderChart()
+
+  await nextTick()
+  restoreScrollPosition()
 
   stopCurrentPolling = startPolling(fetchCurrentMetrics)
   stopHistoryPolling = startPolling(async () => {
@@ -306,6 +361,15 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('scroll', handleScroll)
+    if (scrollSaveFrame !== null) {
+      window.cancelAnimationFrame(scrollSaveFrame)
+      scrollSaveFrame = null
+    }
+    saveScrollPosition()
+  }
+
   if (stopCurrentPolling) stopCurrentPolling()
   if (stopHistoryPolling) stopHistoryPolling()
   if (chartInstance.value) {
