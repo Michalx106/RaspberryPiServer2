@@ -72,31 +72,61 @@ const historyMetrics = ref([])
 const SCROLL_STORAGE_KEY = 'dashboard-scroll-position'
 let scrollSaveFrame = null
 
-const readStoredScrollPosition = () => {
-  if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
-    return null
-  }
+const isBrowserEnvironment = () =>
+  typeof window !== 'undefined' && typeof document !== 'undefined'
 
-  const storedValue = sessionStorage.getItem(SCROLL_STORAGE_KEY)
-  if (!storedValue) return null
+const getCurrentScrollPosition = () => {
+  if (!isBrowserEnvironment()) return 0
 
-  const parsedValue = Number.parseInt(storedValue, 10)
-  return Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : null
-}
+  const scrollingElement =
+    document.scrollingElement ?? document.documentElement ?? document.body
 
-const saveScrollPosition = () => {
-  if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
-    return
-  }
-
-  sessionStorage.setItem(
-    SCROLL_STORAGE_KEY,
-    String(Math.max(0, Math.round(window.scrollY ?? window.pageYOffset ?? 0)))
+  return Math.max(
+    0,
+    Math.round(scrollingElement?.scrollTop ?? window.pageYOffset ?? 0)
   )
 }
 
+const applyScrollPosition = (position, behavior = 'auto') => {
+  if (!isBrowserEnvironment()) return
+
+  window.scrollTo({ top: Math.max(0, position), behavior })
+}
+
+const readStoredScrollPosition = () => {
+  if (!isBrowserEnvironment()) {
+    return null
+  }
+
+  try {
+    const storedValue = window.sessionStorage?.getItem(SCROLL_STORAGE_KEY)
+    if (!storedValue) return null
+
+    const parsedValue = Number.parseInt(storedValue, 10)
+    return Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : null
+  } catch (error) {
+    console.warn('Unable to read stored scroll position', error)
+    return null
+  }
+}
+
+const saveScrollPosition = () => {
+  if (!isBrowserEnvironment()) {
+    return
+  }
+
+  try {
+    window.sessionStorage?.setItem(
+      SCROLL_STORAGE_KEY,
+      String(getCurrentScrollPosition())
+    )
+  } catch (error) {
+    console.warn('Unable to persist scroll position', error)
+  }
+}
+
 const handleScroll = () => {
-  if (typeof window === 'undefined') return
+  if (!isBrowserEnvironment()) return
 
   if (scrollSaveFrame !== null) {
     window.cancelAnimationFrame(scrollSaveFrame)
@@ -109,12 +139,29 @@ const handleScroll = () => {
 }
 
 const restoreScrollPosition = () => {
-  if (typeof window === 'undefined') return
+  if (!isBrowserEnvironment()) return
 
   const savedPosition = readStoredScrollPosition()
   if (savedPosition === null) return
 
-  window.scrollTo({ top: savedPosition, behavior: 'auto' })
+  applyScrollPosition(savedPosition)
+}
+
+const withScrollPreserved = async (operation) => {
+  if (!isBrowserEnvironment()) {
+    return operation()
+  }
+
+  const previousPosition = getCurrentScrollPosition()
+
+  try {
+    return await operation()
+  } finally {
+    await nextTick()
+    window.requestAnimationFrame(() => {
+      applyScrollPosition(previousPosition)
+    })
+  }
 }
 
 const lastUpdated = computed(() => {
@@ -353,11 +400,17 @@ onMounted(async () => {
   await nextTick()
   restoreScrollPosition()
 
-  stopCurrentPolling = startPolling(fetchCurrentMetrics)
-  stopHistoryPolling = startPolling(async () => {
-    await fetchHistoryMetrics()
-    renderChart()
-  })
+  stopCurrentPolling = startPolling(() =>
+    withScrollPreserved(async () => {
+      await fetchCurrentMetrics()
+    })
+  )
+  stopHistoryPolling = startPolling(() =>
+    withScrollPreserved(async () => {
+      await fetchHistoryMetrics()
+      renderChart()
+    })
+  )
 })
 
 onBeforeUnmount(() => {
