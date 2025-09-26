@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import si from 'systeminformation';
+import fetch from 'node-fetch';
 
 const PORT = Number(process.env.PORT) || 3000;
 const SAMPLE_INTERVAL_MS = Number.parseInt(process.env.SAMPLE_INTERVAL_MS ?? '1000', 10);
