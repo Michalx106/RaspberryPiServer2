@@ -3,7 +3,7 @@ import cors from 'cors';
 import si from 'systeminformation';
 
 const PORT = process.env.PORT || 3001;
-const SAMPLE_INTERVAL_MS = Number.parseInt(process.env.SAMPLE_INTERVAL_MS ?? '5000', 10);
+const SAMPLE_INTERVAL_MS = Number.parseInt(process.env.SAMPLE_INTERVAL_MS ?? '1000', 10);
 const MAX_SAMPLES = Number.parseInt(process.env.MAX_METRIC_SAMPLES ?? '1000', 10);
 
 const app = express();

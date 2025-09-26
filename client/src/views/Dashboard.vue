@@ -86,8 +86,32 @@ const metricCards = computed(() => [
 
 const REFRESH_INTERVAL_MS = 1000
 
-let currentIntervalId
-let historyIntervalId
+let stopCurrentPolling
+let stopHistoryPolling
+
+const startPolling = (fetcher) => {
+  let timeoutId
+  let stopped = false
+
+  const run = async () => {
+    try {
+      await fetcher()
+    } finally {
+      if (!stopped) {
+        timeoutId = window.setTimeout(run, REFRESH_INTERVAL_MS)
+      }
+    }
+  }
+
+  timeoutId = window.setTimeout(run, REFRESH_INTERVAL_MS)
+
+  return () => {
+    stopped = true
+    if (timeoutId) {
+      window.clearTimeout(timeoutId)
+    }
+  }
+}
 
 const toFiniteNumber = (value) => {
   const numberValue = typeof value === 'string' ? Number.parseFloat(value) : value
@@ -268,13 +292,16 @@ onMounted(async () => {
   await Promise.all([fetchHistoryMetrics(), fetchCurrentMetrics()])
   renderChart()
 
-  currentIntervalId = window.setInterval(fetchCurrentMetrics, REFRESH_INTERVAL_MS)
-  historyIntervalId = window.setInterval(fetchHistoryMetrics, REFRESH_INTERVAL_MS)
+  stopCurrentPolling = startPolling(fetchCurrentMetrics)
+  stopHistoryPolling = startPolling(async () => {
+    await fetchHistoryMetrics()
+    renderChart()
+  })
 })
 
 onBeforeUnmount(() => {
-  if (currentIntervalId) window.clearInterval(currentIntervalId)
-  if (historyIntervalId) window.clearInterval(historyIntervalId)
+  if (stopCurrentPolling) stopCurrentPolling()
+  if (stopHistoryPolling) stopHistoryPolling()
   if (chartInstance.value) {
     chartInstance.value.destroy()
     chartInstance.value = null
