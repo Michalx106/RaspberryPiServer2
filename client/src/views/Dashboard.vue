@@ -33,7 +33,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import axios from 'axios'
 import {
   CategoryScale,
@@ -194,19 +194,21 @@ const metricCards = computed(() => [
 
 const REFRESH_INTERVAL_MS = 1000
 
-let stopCurrentPolling
-let stopHistoryPolling
+let stopPollingLoop
 
 const startPolling = (fetcher) => {
   let timeoutId = null
   let stopped = false
+  let inFlight = false
 
   const run = async () => {
-    if (stopped) return
+    if (stopped || inFlight) return
 
+    inFlight = true
     try {
       await fetcher()
     } finally {
+      inFlight = false
       if (!stopped) {
         timeoutId = window.setTimeout(run, REFRESH_INTERVAL_MS)
       }
@@ -287,26 +289,39 @@ const mapHistorySample = (sample) => {
 }
 
 const fetchCurrentMetrics = async () => {
-  try {
-    const { data } = await axios.get('/api/metrics/current')
-    currentMetrics.value = mapCurrentMetrics(data)
-    errorMessage.value = ''
-  } catch (error) {
-    console.error('Failed to fetch current metrics', error)
-    errorMessage.value = 'Unable to refresh current metrics.'
-  }
+  const { data } = await axios.get('/api/metrics/current')
+  currentMetrics.value = mapCurrentMetrics(data)
 }
 
 const fetchHistoryMetrics = async () => {
-  try {
-    const { data } = await axios.get('/api/metrics/history')
-    historyMetrics.value = Array.isArray(data?.samples)
-      ? data.samples.map((sample) => mapHistorySample(sample))
-      : []
-    errorMessage.value = ''
-  } catch (error) {
-    console.error('Failed to fetch history metrics', error)
-    errorMessage.value = 'Unable to refresh historical metrics.'
+  const { data } = await axios.get('/api/metrics/history')
+  historyMetrics.value = Array.isArray(data?.samples)
+    ? data.samples.map((sample) => mapHistorySample(sample))
+    : []
+}
+
+const refreshAllMetrics = async () => {
+  const [currentResult, historyResult] = await Promise.allSettled([
+    fetchCurrentMetrics(),
+    fetchHistoryMetrics(),
+  ])
+
+  let encounteredError = false
+
+  if (currentResult.status === 'rejected') {
+    encounteredError = true
+    console.error('Failed to fetch current metrics', currentResult.reason)
+  }
+
+  if (historyResult.status === 'rejected') {
+    encounteredError = true
+    console.error('Failed to fetch history metrics', historyResult.reason)
+  }
+
+  errorMessage.value = encounteredError ? 'Unable to refresh some metrics.' : ''
+
+  if (historyResult.status === 'fulfilled') {
+    renderChart()
   }
 }
 
@@ -436,32 +451,17 @@ onMounted(async () => {
     window.addEventListener('scroll', handleScroll, { passive: true })
   }
 
-  await Promise.all([fetchHistoryMetrics(), fetchCurrentMetrics()])
-  renderChart()
+  await refreshAllMetrics()
 
   await nextTick()
   restoreScrollPosition()
 
-  stopCurrentPolling = startPolling(() =>
+  stopPollingLoop = startPolling(() =>
     withScrollPreserved(async () => {
-      await fetchCurrentMetrics()
-    })
-  )
-  stopHistoryPolling = startPolling(() =>
-    withScrollPreserved(async () => {
-      await fetchHistoryMetrics()
-      renderChart()
+      await refreshAllMetrics()
     })
   )
 })
-
-watch(
-  historyMetrics,
-  () => {
-    renderChart()
-  },
-  { deep: true }
-)
 
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
@@ -473,8 +473,7 @@ onBeforeUnmount(() => {
     saveScrollPosition()
   }
 
-  if (stopCurrentPolling) stopCurrentPolling()
-  if (stopHistoryPolling) stopHistoryPolling()
+  if (stopPollingLoop) stopPollingLoop()
   if (chartInstance.value) {
     chartInstance.value.destroy()
     chartInstance.value = null
