@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import si from 'systeminformation';
 
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3000;
 const SAMPLE_INTERVAL_MS = Number.parseInt(process.env.SAMPLE_INTERVAL_MS ?? '1000', 10);
 const MAX_SAMPLES = Number.parseInt(process.env.MAX_METRIC_SAMPLES ?? '1000', 10);
 
@@ -87,6 +87,8 @@ app.get('/api/metrics/history', (req, res) => {
   });
 });
 
+if (!global.__metricsServerStarted) { global.__metricsServerStarted = true;
 app.listen(PORT, () => {
   console.log(`Metrics server listening on port ${PORT}`);
 });
+}
