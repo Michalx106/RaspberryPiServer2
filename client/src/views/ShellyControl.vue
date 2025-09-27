@@ -444,6 +444,8 @@ watch(selectedDeviceId, async (newId, oldId) => {
 
 onMounted(async () => {
   await loadDevices()
+  console.console.log('Loaded Shelly devices:', devices.value);
+  
 })
 
 onBeforeUnmount(() => {
