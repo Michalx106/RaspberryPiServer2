@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import si from 'systeminformation';
 import fetch from 'node-fetch';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const PORT = Number(process.env.PORT) || 3000;
 const SAMPLE_INTERVAL_MS = Number.parseInt(process.env.SAMPLE_INTERVAL_MS ?? '1000', 10);
@@ -11,58 +14,107 @@ const SHELLY_TIMEOUT_MS = Number.parseInt(process.env.SHELLY_TIMEOUT_MS ?? '5000
 const SHELLY_DEFAULT_DEVICE_ID = process.env.SHELLY_DEFAULT_DEVICE_ID ?? 'swiatlo-michal-pokoj';
 const SHELLY_DEFAULT_DEVICE_NAME =
   process.env.SHELLY_DEFAULT_DEVICE_NAME ?? 'Światło Michał Pokój';
+const SHELLY_DEVICES_FILE = process.env.SHELLY_DEVICES_FILE;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DEFAULT_SHELLY_DEVICES_PATH = path.join(__dirname, 'shelly-devices.json');
+
+function getShellyDeviceConfigPaths() {
+  const customPath = SHELLY_DEVICES_FILE?.trim();
+  const candidates = [];
+
+  if (customPath) {
+    candidates.push(customPath);
+  }
+
+  candidates.push(DEFAULT_SHELLY_DEVICES_PATH);
+
+  return candidates
+    .map((candidate) =>
+      path.isAbsolute(candidate) ? candidate : path.resolve(process.cwd(), candidate)
+    )
+    .filter((candidate, index, array) => array.indexOf(candidate) === index);
+}
 
 function normalizeBaseUrl(url) {
   if (!url) return '';
   return url.endsWith('/') ? url : `${url}/`;
 }
 
-function parseShellyDevices() {
-  const raw = process.env.SHELLY_DEVICES;
+function sanitizeShellyDevices(devices) {
+  return devices
+    .map((device) => ({
+      id: String(device.id ?? '').trim(),
+      name: String(device.name ?? '').trim(),
+      host: normalizeBaseUrl(device.host ?? device.baseUrl ?? '')
+    }))
+    .filter((device) => device.id && device.name && device.host);
+}
 
-  if (!raw) {
-    return [
-      {
-        id: SHELLY_DEFAULT_DEVICE_ID,
-        name: SHELLY_DEFAULT_DEVICE_NAME,
-        host: normalizeBaseUrl(SHELLY_BASE_URL)
-      }
-    ];
-  }
-
+function parseShellyDevicesFromJson(raw, sourceLabel) {
+  if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      throw new Error('SHELLY_DEVICES must be a JSON array');
+      throw new Error('Expected a JSON array of devices');
     }
 
-    const sanitized = parsed
-      .map((device) => ({
-        id: String(device.id ?? '').trim(),
-        name: String(device.name ?? '').trim(),
-        host: normalizeBaseUrl(device.host ?? device.baseUrl ?? '')
-      }))
-      .filter((device) => device.id && device.name && device.host);
+    const sanitized = sanitizeShellyDevices(parsed);
 
-    return sanitized.length
-      ? sanitized
-      : [
-          {
-            id: SHELLY_DEFAULT_DEVICE_ID,
-            name: SHELLY_DEFAULT_DEVICE_NAME,
-            host: normalizeBaseUrl(SHELLY_BASE_URL)
-          }
-        ];
+    if (!sanitized.length) {
+      console.warn(`No valid Shelly devices found in ${sourceLabel}.`);
+      return null;
+    }
+
+    return sanitized;
   } catch (error) {
-    console.warn('Failed to parse SHELLY_DEVICES environment variable:', error);
-    return [
-      {
-        id: SHELLY_DEFAULT_DEVICE_ID,
-        name: SHELLY_DEFAULT_DEVICE_NAME,
-        host: normalizeBaseUrl(SHELLY_BASE_URL)
-      }
-    ];
+    console.warn(`Failed to parse Shelly device configuration from ${sourceLabel}:`, error);
+    return null;
   }
+}
+
+function loadShellyDevicesFromFile() {
+  for (const candidate of getShellyDeviceConfigPaths()) {
+    try {
+      if (!fs.existsSync(candidate)) {
+        continue;
+      }
+
+      const contents = fs.readFileSync(candidate, 'utf8');
+      const devices = parseShellyDevicesFromJson(contents, `file ${candidate}`);
+      if (devices?.length) {
+        return devices;
+      }
+    } catch (error) {
+      console.warn(`Failed to read Shelly device configuration file ${candidate}:`, error);
+    }
+  }
+
+  return null;
+}
+
+function parseShellyDevices() {
+  const envDevices = parseShellyDevicesFromJson(
+    process.env.SHELLY_DEVICES,
+    'environment variable SHELLY_DEVICES'
+  );
+  if (envDevices?.length) {
+    return envDevices;
+  }
+
+  const fileDevices = loadShellyDevicesFromFile();
+  if (fileDevices?.length) {
+    return fileDevices;
+  }
+
+  return [
+    {
+      id: SHELLY_DEFAULT_DEVICE_ID,
+      name: SHELLY_DEFAULT_DEVICE_NAME,
+      host: normalizeBaseUrl(SHELLY_BASE_URL)
+    }
+  ];
 }
 
 const shellyDevices = parseShellyDevices();
