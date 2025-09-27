@@ -27,11 +27,36 @@ The server listens on port `3001` by default. Override the port or sampling beha
 - `PORT` – HTTP port to listen on (default: `3001`)
 - `SAMPLE_INTERVAL_MS` – Interval between metric samples stored in history (default: `5000` ms)
 - `MAX_METRIC_SAMPLES` – Maximum number of samples kept in the ring buffer (default: `1000`)
+- `SHELLY_DEVICES_FILE` – Absolute or relative path to a JSON file describing Shelly devices (default: `./shelly-devices.json`)
 
 ### API Endpoints
 
 - `GET /api/metrics/current` – Returns a fresh snapshot collected on request.
 - `GET /api/metrics/history` – Returns the in-memory history of recent samples.
+
+### Shelly device configuration
+
+The server loads Shelly device metadata from `shelly-devices.json` located next to `index.js`. Edit that file to add or modify the devices exposed by the `/api/shelly/*` endpoints:
+
+```json
+[
+  {
+    "id": "swiatlo-michal-pokoj",
+    "name": "Światło Michał Pokój",
+    "host": "http://192.168.0.122/",
+    "channel": 0
+  }
+]
+```
+
+Each entry must include:
+
+- `id` – unique identifier used in API routes
+- `name` – friendly label shown in the UI
+- `host` – base URL (including protocol) of the device, ending with a trailing slash
+- `channel` – switch identifier (numeric) passed to `Switch.GetStatus`/`Switch.Set` RPC calls (default: `0`)
+
+To store the configuration elsewhere, set `SHELLY_DEVICES_FILE` to point at an alternate JSON file.
 
 ## Keeping the server running
 
