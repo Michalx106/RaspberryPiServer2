@@ -333,6 +333,96 @@ function normalizeShellyStatusResponse(rawStatus, device) {
   const channel = toNonNegativeInteger(device.channel, 0);
   const normalized = { ...rawStatus };
 
+  const toFiniteNumber = (value) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+  const extractTemperature = () => {
+    const normalizeEntry = (entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return { celsius: null, fahrenheit: null, sensor: null };
+      }
+
+      const candidatesCelsius = [
+        entry.celsius,
+        entry.C,
+        entry.temp,
+        entry.temperature,
+        entry.value,
+        entry.t,
+        entry.tc,
+        entry.tC,
+        entry.TC
+      ];
+      const candidatesFahrenheit = [
+        entry.fahrenheit,
+        entry.F,
+        entry.tf,
+        entry.tF,
+        entry.TF
+      ];
+
+      const celsius = candidatesCelsius.map(toFiniteNumber).find((value) => value !== null);
+      const fahrenheit = candidatesFahrenheit
+        .map(toFiniteNumber)
+        .find((value) => value !== null);
+
+      return {
+        celsius,
+        fahrenheit,
+        sensor: entry.id ?? entry.sensor ?? entry.name ?? null
+      };
+    };
+
+    const collected = [];
+
+    if (Array.isArray(rawStatus.temperatures)) {
+      collected.push(...rawStatus.temperatures.map(normalizeEntry));
+    }
+
+    const directObjects = [rawStatus.temperature, rawStatus.tmp, rawStatus.temp];
+    directObjects
+      .map(normalizeEntry)
+      .forEach((entry) => collected.push(entry));
+
+    const directCelsiusCandidates = [
+      rawStatus.temperatureC,
+      rawStatus.temperature_c,
+      rawStatus.tempC,
+      rawStatus.tempc,
+      rawStatus.tc,
+      rawStatus.tC
+    ];
+
+    const directFahrenheitCandidates = [
+      rawStatus.temperatureF,
+      rawStatus.temperature_f,
+      rawStatus.tempF,
+      rawStatus.tempf,
+      rawStatus.tf,
+      rawStatus.tF
+    ];
+
+    const celsius = collected
+      .map((entry) => entry.celsius)
+      .concat(directCelsiusCandidates)
+      .map(toFiniteNumber)
+      .find((value) => value !== null);
+
+    const fahrenheit = collected
+      .map((entry) => entry.fahrenheit)
+      .concat(directFahrenheitCandidates)
+      .map(toFiniteNumber)
+      .find((value) => value !== null);
+
+    if (celsius === null && fahrenheit === null) {
+      return null;
+    }
+
+    const sensor = collected.map((entry) => entry.sensor).find((value) => value) ?? null;
+
+    return { celsius, fahrenheit, sensor };
+  };
+
   const switchEntry = { ...rawStatus, id: rawStatus.id ?? channel };
   const switches = Array.isArray(rawStatus.switches)
     ? rawStatus.switches
@@ -395,6 +485,16 @@ function normalizeShellyStatusResponse(rawStatus, device) {
     host: device.host,
     channel
   };
+
+  const temperature = extractTemperature();
+  if (temperature) {
+    normalized.temperature = {
+      ...normalized.temperature,
+      ...temperature
+    };
+    normalized.temperatureC = temperature.celsius;
+    normalized.temperatureF = temperature.fahrenheit;
+  }
 
   return normalized;
 }

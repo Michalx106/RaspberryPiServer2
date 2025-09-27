@@ -60,6 +60,26 @@
           <span class="status-label">Stan przekaźnika</span>
           <span :class="['relay-pill', relayStateClass]">{{ relayStateLabel }}</span>
         </div>
+        <div class="status-tile" v-if="temperatureDetails">
+          <span class="status-label">Temperatura</span>
+          <span class="status-value">
+            <span v-if="temperatureDetails.celsius !== null">
+              {{ temperatureDetails.celsius.toFixed(1) }} °C
+            </span>
+            <span
+              v-if="temperatureDetails.celsius !== null && temperatureDetails.fahrenheit !== null"
+              aria-hidden="true"
+            >
+              ·
+            </span>
+            <span v-if="temperatureDetails.fahrenheit !== null">
+              {{ temperatureDetails.fahrenheit.toFixed(1) }} °F
+            </span>
+          </span>
+          <span v-if="temperatureDetails.sensor" class="status-subtle">
+            Czujnik: {{ temperatureDetails.sensor }}
+          </span>
+        </div>
         <div class="status-tile" v-if="meterDetails?.power !== null">
           <span class="status-label">Pobór mocy</span>
           <span class="status-value">{{ meterDetails.power.toFixed(1) }} W</span>
@@ -154,6 +174,19 @@ const toBooleanOrNull = (value) => {
   if (typeof value === 'boolean') return value
   if (value === 1 || value === '1') return true
   if (value === 0 || value === '0') return false
+  return null
+}
+
+const toFiniteNumberOrNull = (value) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
   return null
 }
 
@@ -255,6 +288,58 @@ const deviceInfo = computed(() => {
   return { name, model, firmware }
 })
 
+const temperatureDetails = computed(() => {
+  const temperature = shellyStatus.value?.temperature ?? null
+
+  const getCandidateNumber = (candidates) =>
+    candidates
+      .map((candidate) => toFiniteNumberOrNull(candidate))
+      .find((candidate) => candidate !== null) ?? null
+
+  const celsiusCandidates = [
+    temperature?.celsius,
+    temperature?.temp,
+    temperature?.temperature,
+    temperature?.value,
+    temperature?.t,
+    temperature?.tc,
+    temperature?.tC,
+    shellyStatus.value?.temperatureC,
+    shellyStatus.value?.temperature_c
+  ]
+
+  const fahrenheitCandidates = [
+    temperature?.fahrenheit,
+    temperature?.tF,
+    temperature?.tf,
+    shellyStatus.value?.temperatureF,
+    shellyStatus.value?.temperature_f
+  ]
+
+  const celsius = getCandidateNumber(celsiusCandidates)
+  const fahrenheit = getCandidateNumber(fahrenheitCandidates)
+
+  if (celsius === null && fahrenheit === null) {
+    return null
+  }
+
+  const sensorCandidate =
+    temperature?.sensor ?? temperature?.id ?? temperature?.name ?? ''
+
+  let sensor = ''
+  if (typeof sensorCandidate === 'string') {
+    sensor = sensorCandidate.trim()
+  } else if (sensorCandidate != null) {
+    sensor = String(sensorCandidate)
+  }
+
+  return {
+    celsius,
+    fahrenheit,
+    sensor
+  }
+})
+
 const formattedLastUpdated = computed(() => {
   if (!lastRefreshedAt.value) return ''
   const date = new Date(lastRefreshedAt.value)
@@ -284,9 +369,29 @@ const statusSummary = computed(() => {
   if (isBusy.value) return 'Aktualizuję stan urządzenia…'
   if (relayDetails.value.isOn === null) return 'Oczekiwanie na dane z urządzenia Shelly.'
   const deviceName = selectedDevice.value.name
-  return relayDetails.value.isOn
+  const stateText = relayDetails.value.isOn
     ? `Światło „${deviceName}” świeci.`
     : `Światło „${deviceName}” jest wyłączone.`
+
+  const temperatureInfo = temperatureDetails.value
+  const hasTemperature =
+    temperatureInfo &&
+    (temperatureInfo.celsius !== null || temperatureInfo.fahrenheit !== null)
+
+  const temperatureText = hasTemperature
+    ? (() => {
+        const parts = []
+        if (temperatureInfo.celsius !== null) {
+          parts.push(`${temperatureInfo.celsius.toFixed(1)}°C`)
+        }
+        if (temperatureInfo.fahrenheit !== null) {
+          parts.push(`${temperatureInfo.fahrenheit.toFixed(1)}°F`)
+        }
+        return `Temperatura urządzenia wynosi ${parts.join(' / ')}.`
+      })()
+    : ''
+
+  return temperatureText ? `${stateText} ${temperatureText}` : stateText
 })
 
 const powerButtonClasses = computed(() => ({
@@ -664,6 +769,13 @@ onBeforeUnmount(() => {
   color: #0f172a;
 }
 
+.status-subtle {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
 .relay-pill {
   display: inline-flex;
   align-items: center;
@@ -766,6 +878,7 @@ onBeforeUnmount(() => {
   .power-meta,
   .status-label,
   .status-value,
+  .status-subtle,
   .detail-label,
   .detail-value,
   .helper-text,
