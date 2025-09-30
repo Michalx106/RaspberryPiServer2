@@ -380,94 +380,64 @@ const renderChart = () => {
     return
   }
 
-  const chartData = {
-    labels,
-    datasets,
-  }
+  const ctx = chartCanvas.value.getContext('2d')
+  if (!ctx) return
 
-  if (!chartInstance.value) {
-    const ctx = chartCanvas.value.getContext('2d')
-    chartInstance.value = new Chart(ctx, {
-      type: 'line',
-      data: chartData,
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {
-          duration: 0,
-        },
-        interaction: {
-          mode: 'index',
-          intersect: false,
-        },
-        scales: {
-          y: {
-            type: 'linear',
-            beginAtZero: true,
-            title: {
-              display: true,
-              text: 'Value',
-            },
-          },
-          x: {
-            type: 'category',
-            title: {
-              display: true,
-              text: 'Time',
-            },
-          },
-        },
-        plugins: {
-          legend: {
+  const chartConfig = {
+    type: 'line',
+    data: {
+      labels,
+      datasets,
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 0,
+      },
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      scales: {
+        y: {
+          type: 'linear',
+          beginAtZero: true,
+          title: {
             display: true,
-            position: 'bottom',
+            text: 'Value',
           },
-          tooltip: {
-            callbacks: {
-              label: (context) => {
-                const value = context.parsed?.y
-                if (!Number.isFinite(value)) {
-                  return `${context.dataset.label}: --`
-                }
-                return `${context.dataset.label}: ${value.toFixed(1)}`
-              },
+        },
+        x: {
+          type: 'category',
+          title: {
+            display: true,
+            text: 'Time',
+          },
+        },
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+        },
+        tooltip: {
+          callbacks: {
+            label: (context) => {
+              const value = context.parsed?.y
+              if (!Number.isFinite(value)) {
+                return `${context.dataset.label}: --`
+              }
+              return `${context.dataset.label}: ${value.toFixed(1)}`
             },
           },
         },
       },
-    })
-    return
+    },
   }
 
-  const existingLabels = chartInstance.value.data.labels
-  existingLabels.splice(0, existingLabels.length, ...chartData.labels)
-
-  const existingDatasets = chartInstance.value.data.datasets
-
-  chartData.datasets.forEach((dataset, index) => {
-    const existingDataset = existingDatasets[index]
-
-    if (!existingDataset) {
-      existingDatasets.push({ ...dataset, data: [...dataset.data] })
-      return
-    }
-
-    existingDataset.label = dataset.label
-    existingDataset.borderColor = dataset.borderColor
-    existingDataset.backgroundColor = dataset.backgroundColor
-    existingDataset.fill = dataset.fill
-    existingDataset.tension = dataset.tension
-    existingDataset.pointRadius = dataset.pointRadius
-    existingDataset.pointHoverRadius = dataset.pointHoverRadius
-
-    existingDataset.data.splice(0, existingDataset.data.length, ...dataset.data)
-  })
-
-  if (existingDatasets.length > chartData.datasets.length) {
-    existingDatasets.splice(chartData.datasets.length)
-  }
-
-  chartInstance.value.update('none')
+  destroyChartInstance()
+  chartInstance.value = new Chart(ctx, chartConfig)
 }
 
 onMounted(async () => {
