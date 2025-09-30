@@ -345,6 +345,24 @@ const buildDataset = (label, key, color) => ({
   pointHoverRadius: 5,
 })
 
+const datasetHasFiniteValues = (dataset) =>
+  dataset.data.some((value) => Number.isFinite(value))
+
+const clearExistingChartData = () => {
+  if (!chartInstance.value) return
+
+  chartInstance.value.data.labels.splice(
+    0,
+    chartInstance.value.data.labels.length
+  )
+
+  chartInstance.value.data.datasets.forEach((dataset) => {
+    dataset.data.splice(0, dataset.data.length)
+  })
+
+  chartInstance.value.update('none')
+}
+
 const renderChart = () => {
   if (!chartCanvas.value) return
 
@@ -361,6 +379,14 @@ const renderChart = () => {
       buildDataset('Memory Usage (%)', 'memory', '#22c55e'),
       buildDataset('Temperature (°C)', 'temperature', '#f97316'),
     ],
+  }
+
+  const hasHistorySamples = historyMetrics.value.length > 0
+  const hasRenderableData = chartData.datasets.some(datasetHasFiniteValues)
+
+  if (!hasHistorySamples || !hasRenderableData) {
+    clearExistingChartData()
+    return
   }
 
   if (!chartInstance.value) {
@@ -380,6 +406,7 @@ const renderChart = () => {
         },
         scales: {
           y: {
+            type: 'linear',
             beginAtZero: true,
             title: {
               display: true,
@@ -387,6 +414,7 @@ const renderChart = () => {
             },
           },
           x: {
+            type: 'category',
             title: {
               display: true,
               text: 'Time',
