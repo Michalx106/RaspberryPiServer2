@@ -83,6 +83,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import axios from 'axios'
+import { formatSensorReading as formatSensorReadingImpl } from '../utils/sensorFormatting.js'
 
 const devices = ref([])
 const isRefreshing = ref(false)
@@ -169,17 +170,7 @@ const updateDimmer = async (device, level) => {
   await performDeviceAction(device, { level })
 }
 
-const formatSensorReading = (state) => {
-  if (!state || typeof state !== 'object') {
-    return 'Unavailable'
-  }
-
-  if (state.value === undefined) {
-    return JSON.stringify(state)
-  }
-
-  return `${state.value}${state.unit ? ` ${state.unit}` : ''}`
-}
+const formatSensorReading = (state) => formatSensorReadingImpl(state)
 
 const stopAutoRefresh = () => {
   if (autoRefreshTimerId !== null && typeof window !== 'undefined') {
