@@ -21,11 +21,14 @@
             <p class="device-state">Status: {{ device.state?.on ? 'On' : 'Off' }}</p>
             <button
               class="action-button"
+              :class="device.state?.on ? 'action-button--on' : 'action-button--off'"
               type="button"
               @click="() => toggleSwitch(device)"
               :disabled="loading"
+              :aria-pressed="device.state?.on ?? false"
             >
-              Toggle
+              <span class="power-icon" aria-hidden="true">⏻</span>
+              <span class="action-label">{{ device.state?.on ? 'Turn off' : 'Turn on' }}</span>
             </button>
           </template>
 
@@ -247,27 +250,59 @@ onMounted(() => {
 
 .action-button {
   align-self: flex-start;
-  padding: 0.5rem 1rem;
-  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.75rem;
+  border-radius: 999px;
   border: none;
-  background: #10b981;
+  font-size: 1.05rem;
+  font-weight: 700;
   color: #fff;
-  font-weight: 600;
   cursor: pointer;
-  transition: background-color 150ms ease-in-out, transform 150ms ease-in-out;
+  transition: transform 150ms ease-in-out, box-shadow 150ms ease-in-out, background-color 150ms ease-in-out;
+}
+
+.action-button--on {
+  background: #16a34a;
+  box-shadow: 0 12px 25px rgba(22, 163, 74, 0.2);
+}
+
+.action-button--off {
+  background: #dc2626;
+  box-shadow: 0 12px 25px rgba(220, 38, 38, 0.2);
 }
 
 .action-button:disabled {
-  background: #6ee7b7;
   cursor: not-allowed;
+  opacity: 0.7;
+  box-shadow: none;
 }
 
-.action-button:not(:disabled):hover {
-  background: #059669;
+.action-button--on:not(:disabled):hover {
+  background: #15803d;
+}
+
+.action-button--off:not(:disabled):hover {
+  background: #b91c1c;
 }
 
 .action-button:not(:disabled):active {
-  transform: scale(0.97);
+  transform: scale(0.96);
+}
+
+.action-button:focus-visible {
+  outline: 3px solid rgba(250, 204, 21, 0.9);
+  outline-offset: 4px;
+}
+
+.power-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.action-label {
+  letter-spacing: 0.04em;
 }
 
 .slider-label {
