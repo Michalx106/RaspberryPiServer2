@@ -1,32 +1,7 @@
 [
   {
-    "id": "living-room-light",
-    "name": "Living Room Light",
-    "type": "switch",
-    "state": {
-      "on": false
-    }
-  },
-  {
-    "id": "bedroom-dimmer",
-    "name": "Bedroom Dimmer",
-    "type": "dimmer",
-    "state": {
-      "level": 45
-    }
-  },
-  {
-    "id": "garage-sensor",
-    "name": "Garage Temperature Sensor",
-    "type": "sensor",
-    "state": {
-      "value": 21.5,
-      "unit": "°C"
-    }
-  },
-  {
     "id": "shelly1plus-relay",
-    "name": "Shelly 1 Plus Relay",
+    "name": "Bedroom Light",
     "type": "switch",
     "integration": {
       "type": "shelly-gen3",
