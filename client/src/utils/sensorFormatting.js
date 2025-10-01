@@ -104,7 +104,7 @@ export const formatSensorReading = (state) => {
     return 'Unavailable'
   }
 
-  return formattedEntries.join(', ')
+  return formattedEntries.join('\n')
 }
 
 export default formatSensorReading

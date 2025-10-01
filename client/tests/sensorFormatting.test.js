@@ -21,7 +21,7 @@ test('formats multi-field sensor objects with known suffixes', () => {
     humidityPercent: 40
   })
 
-  assert.equal(reading, 'Temperature: 24.2 °C, Humidity: 40 %')
+  assert.equal(reading, 'Temperature: 24.2 °C\nHumidity: 40 %')
 })
 
 test('ignores keys with empty values and falls back when nothing remains', () => {
