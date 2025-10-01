@@ -61,8 +61,9 @@
           </template>
 
           <template v-else-if="device.type === 'sensor'">
-            <p class="device-state">
-              Reading: {{ formatSensorReading(device.state) }}
+            <p class="device-state device-state--sensor">
+              <span class="device-state__label">Reading:</span>
+              <span class="device-state__value">{{ formatSensorReading(device.state) }}</span>
             </p>
             <p class="device-hint">Sensors are read-only.</p>
           </template>
@@ -83,6 +84,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import axios from 'axios'
+import { formatSensorReading as formatSensorReadingImpl } from '../utils/sensorFormatting.js'
 
 const devices = ref([])
 const isRefreshing = ref(false)
@@ -169,17 +171,7 @@ const updateDimmer = async (device, level) => {
   await performDeviceAction(device, { level })
 }
 
-const formatSensorReading = (state) => {
-  if (!state || typeof state !== 'object') {
-    return 'Unavailable'
-  }
-
-  if (state.value === undefined) {
-    return JSON.stringify(state)
-  }
-
-  return `${state.value}${state.unit ? ` ${state.unit}` : ''}`
-}
+const formatSensorReading = (state) => formatSensorReadingImpl(state)
 
 const stopAutoRefresh = () => {
   if (autoRefreshTimerId !== null && typeof window !== 'undefined') {
@@ -313,6 +305,21 @@ onUnmounted(() => {
   color: #0f172a;
 }
 
+.device-state--sensor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.device-state__label {
+  font-weight: inherit;
+}
+
+.device-state__value {
+  white-space: pre-line;
+  font-weight: 400;
+}
+
 .device-hint {
   font-size: 0.875rem;
   color: #475569;
@@ -423,6 +430,10 @@ onUnmounted(() => {
   .device-state,
   .slider-label {
     color: #e2e8f0;
+  }
+
+  .device-state__value {
+    color: inherit;
   }
 
   .device-type {
