@@ -157,6 +157,8 @@ const restoreScrollPosition = () => {
   applyScrollPosition(savedPosition)
 }
 
+const SCROLL_RESTORE_TOLERANCE = 2
+
 const withScrollPreserved = async (operation) => {
   if (!isBrowserEnvironment()) {
     return operation()
@@ -169,7 +171,10 @@ const withScrollPreserved = async (operation) => {
   } finally {
     await nextTick()
     window.requestAnimationFrame(() => {
-      applyScrollPosition(previousPosition)
+      const currentPosition = getCurrentScrollPosition()
+      if (Math.abs(currentPosition - previousPosition) <= SCROLL_RESTORE_TOLERANCE) {
+        applyScrollPosition(previousPosition)
+      }
     })
   }
 }
