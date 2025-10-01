@@ -334,13 +334,13 @@ onUnmounted(() => {
 }
 
 .action-button--on {
-  background: #16a34a;
-  box-shadow: 0 12px 25px rgba(22, 163, 74, 0.2);
+  background: #dc2626;
+  box-shadow: 0 12px 25px rgba(220, 38, 38, 0.2);
 }
 
 .action-button--off {
-  background: #dc2626;
-  box-shadow: 0 12px 25px rgba(220, 38, 38, 0.2);
+  background: #16a34a;
+  box-shadow: 0 12px 25px rgba(22, 163, 74, 0.2);
 }
 
 .action-button:disabled {
@@ -363,11 +363,11 @@ onUnmounted(() => {
 }
 
 .action-button--on:not(:disabled):hover {
-  background: #15803d;
+  background: #b91c1c;
 }
 
 .action-button--off:not(:disabled):hover {
-  background: #b91c1c;
+  background: #15803d;
 }
 
 .action-button:not(:disabled):active {
