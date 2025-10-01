@@ -81,13 +81,16 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import axios from 'axios'
 
 const devices = ref([])
 const isRefreshing = ref(false)
 const errorMessage = ref('')
 const pendingDeviceIds = ref(new Set())
+
+const AUTO_REFRESH_INTERVAL_MS = 5000
+let autoRefreshTimerId = null
 
 const isDevicePending = (deviceId) => pendingDeviceIds.value.has(deviceId)
 
@@ -178,8 +181,52 @@ const formatSensorReading = (state) => {
   return `${state.value}${state.unit ? ` ${state.unit}` : ''}`
 }
 
+const stopAutoRefresh = () => {
+  if (autoRefreshTimerId !== null && typeof window !== 'undefined') {
+    window.clearInterval(autoRefreshTimerId)
+    autoRefreshTimerId = null
+  }
+}
+
+const startAutoRefresh = () => {
+  stopAutoRefresh()
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return
+  }
+
+  autoRefreshTimerId = window.setInterval(() => {
+    if (!document.hidden) {
+      refreshDevices()
+    }
+  }, AUTO_REFRESH_INTERVAL_MS)
+}
+
+const handleVisibilityChange = () => {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  if (!document.hidden) {
+    refreshDevices()
+  }
+}
+
 onMounted(() => {
   refreshDevices()
+  startAutoRefresh()
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  }
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
+
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }
 })
 </script>
 
