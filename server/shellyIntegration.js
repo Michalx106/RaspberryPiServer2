@@ -71,3 +71,35 @@ export async function fetchShellySwitchState(device) {
     body: { id: switchId },
   });
 }
+
+export function extractShellySwitchState(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const state = {};
+  let hasAnyField = false;
+
+  if (typeof payload.output === 'boolean') {
+    state.on = payload.output;
+    hasAnyField = true;
+  } else if (typeof payload.on === 'boolean') {
+    state.on = payload.on;
+    hasAnyField = true;
+  }
+
+  for (const key of [
+    'source',
+    'timer_started',
+    'timer_duration',
+    'timer_remaining',
+    'has_timer',
+  ]) {
+    if (payload[key] !== undefined) {
+      state[key] = payload[key];
+      hasAnyField = true;
+    }
+  }
+
+  return hasAnyField ? state : null;
+}
