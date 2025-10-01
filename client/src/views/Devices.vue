@@ -81,13 +81,16 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import axios from 'axios'
 
 const devices = ref([])
 const isRefreshing = ref(false)
 const errorMessage = ref('')
 const pendingDeviceIds = ref(new Set())
+
+const AUTO_REFRESH_INTERVAL_MS = 5000
+let autoRefreshTimerId = null
 
 const isDevicePending = (deviceId) => pendingDeviceIds.value.has(deviceId)
 
@@ -178,8 +181,52 @@ const formatSensorReading = (state) => {
   return `${state.value}${state.unit ? ` ${state.unit}` : ''}`
 }
 
+const stopAutoRefresh = () => {
+  if (autoRefreshTimerId !== null && typeof window !== 'undefined') {
+    window.clearInterval(autoRefreshTimerId)
+    autoRefreshTimerId = null
+  }
+}
+
+const startAutoRefresh = () => {
+  stopAutoRefresh()
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return
+  }
+
+  autoRefreshTimerId = window.setInterval(() => {
+    if (!document.hidden) {
+      refreshDevices()
+    }
+  }, AUTO_REFRESH_INTERVAL_MS)
+}
+
+const handleVisibilityChange = () => {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  if (!document.hidden) {
+    refreshDevices()
+  }
+}
+
 onMounted(() => {
   refreshDevices()
+  startAutoRefresh()
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  }
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
+
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }
 })
 </script>
 
@@ -287,13 +334,13 @@ onMounted(() => {
 }
 
 .action-button--on {
-  background: #16a34a;
-  box-shadow: 0 12px 25px rgba(22, 163, 74, 0.2);
+  background: #dc2626;
+  box-shadow: 0 12px 25px rgba(220, 38, 38, 0.2);
 }
 
 .action-button--off {
-  background: #dc2626;
-  box-shadow: 0 12px 25px rgba(220, 38, 38, 0.2);
+  background: #16a34a;
+  box-shadow: 0 12px 25px rgba(22, 163, 74, 0.2);
 }
 
 .action-button:disabled {
@@ -316,11 +363,11 @@ onMounted(() => {
 }
 
 .action-button--on:not(:disabled):hover {
-  background: #15803d;
+  background: #b91c1c;
 }
 
 .action-button--off:not(:disabled):hover {
-  background: #b91c1c;
+  background: #15803d;
 }
 
 .action-button:not(:disabled):active {

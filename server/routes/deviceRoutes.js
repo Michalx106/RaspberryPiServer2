@@ -1,11 +1,58 @@
 import { Router } from 'express';
 
 import { findDeviceById, listDevices, updateDeviceState } from '../deviceStore.js';
-import { applyShellySwitchState } from '../shellyIntegration.js';
+import {
+  applyShellySwitchState,
+  extractShellySwitchState,
+  fetchShellySwitchState,
+} from '../shellyIntegration.js';
 
 const router = Router();
 
-router.get('/', (req, res) => {
+async function refreshShellySwitchStates() {
+  const devices = listDevices();
+
+  const shellySwitches = devices.filter(
+    (device) => device.type === 'switch' && device.integration?.type === 'shelly-gen3',
+  );
+
+  await Promise.all(
+    shellySwitches.map(async (device) => {
+      try {
+        const status = await fetchShellySwitchState(device);
+        const parsedState = extractShellySwitchState(status);
+
+        if (!parsedState || typeof parsedState.on !== 'boolean') {
+          return;
+        }
+
+        const currentState = findDeviceById(device.id)?.state ?? {};
+        const hasChanges = Object.entries(parsedState).some(
+          ([key, value]) => currentState?.[key] !== value,
+        );
+
+        if (!hasChanges) {
+          return;
+        }
+
+        await updateDeviceState(device.id, (state) => ({
+          ...state,
+          ...parsedState,
+        }));
+      } catch (error) {
+        console.warn(`Failed to refresh state from Shelly device ${device.id}:`, error);
+      }
+    }),
+  );
+}
+
+router.get('/', async (req, res) => {
+  try {
+    await refreshShellySwitchStates();
+  } catch (error) {
+    console.warn('Unexpected error while refreshing Shelly switch states:', error);
+  }
+
   res.json(listDevices());
 });
 
@@ -24,9 +71,26 @@ router.post('/:id/actions', async (req, res) => {
       case 'switch': {
         const { action, on } = req.body ?? {};
         let desiredOn;
+        let currentOn = device.state?.on ?? false;
+
+        if (device.integration?.type === 'shelly-gen3' && action === 'toggle') {
+          try {
+            const shellyStatus = await fetchShellySwitchState(device);
+            const parsedState = extractShellySwitchState(shellyStatus);
+
+            if (parsedState && typeof parsedState.on === 'boolean') {
+              currentOn = parsedState.on;
+            }
+          } catch (statusError) {
+            console.warn(
+              `Failed to read current state from Shelly device ${deviceId}:`,
+              statusError,
+            );
+          }
+        }
 
         if (action === 'toggle') {
-          desiredOn = !(device.state?.on ?? false);
+          desiredOn = !currentOn;
         } else if (typeof on === 'boolean') {
           desiredOn = on;
         } else {
@@ -37,29 +101,30 @@ router.post('/:id/actions', async (req, res) => {
 
         if (device.integration?.type === 'shelly-gen3') {
           const shellyResult = await applyShellySwitchState(device, desiredOn);
-          const shellyOn = typeof shellyResult.on === 'boolean' ? shellyResult.on : desiredOn;
-          const extraState = {};
+          const immediateState = extractShellySwitchState(shellyResult);
+          let latestState = immediateState ?? null;
 
-          if (shellyResult && typeof shellyResult === 'object') {
-            const { source, timer_started, timer_duration, has_timer } = shellyResult;
-            if (source !== undefined) {
-              extraState.source = source;
+          try {
+            const shellyStatus = await fetchShellySwitchState(device);
+            const refreshedState = extractShellySwitchState(shellyStatus);
+            if (refreshedState) {
+              latestState = { ...(latestState ?? {}), ...refreshedState };
             }
-            if (timer_started !== undefined) {
-              extraState.timer_started = timer_started;
-            }
-            if (timer_duration !== undefined) {
-              extraState.timer_duration = timer_duration;
-            }
-            if (has_timer !== undefined) {
-              extraState.has_timer = has_timer;
-            }
+          } catch (statusError) {
+            console.warn(
+              `Failed to refresh state from Shelly device ${deviceId} after update:`,
+              statusError,
+            );
+          }
+
+          const statePatch = { ...(latestState ?? {}) };
+          if (typeof statePatch.on !== 'boolean') {
+            statePatch.on = desiredOn;
           }
 
           updatedDevice = await updateDeviceState(deviceId, (state) => ({
             ...state,
-            ...extraState,
-            on: shellyOn,
+            ...statePatch,
           }));
         } else {
           updatedDevice = await updateDeviceState(deviceId, (state) => ({
