@@ -66,6 +66,56 @@ async function updateDeviceState(deviceId, mutator) {
   return updatedDevice;
 }
 
+async function applyShellySwitchState(device, desiredOn) {
+  const integration = device.integration;
+  if (!integration || integration.type !== 'shelly-gen3') {
+    throw new Error('Shelly integration is not configured for this device');
+  }
+
+  const { ip, switchId } = integration;
+  if (!ip) {
+    throw new Error('Shelly integration is missing the device IP address');
+  }
+  if (switchId === undefined) {
+    throw new Error('Shelly integration is missing the switch identifier');
+  }
+
+  const url = `http://${ip}/rpc/Switch.Set`;
+  let response;
+
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id: switchId, on: desiredOn }),
+    });
+  } catch (error) {
+    throw new Error(`Failed to connect to Shelly device at ${ip}: ${error.message}`);
+  }
+
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => '');
+    throw new Error(
+      `Shelly device at ${ip} responded with ${response.status} ${response.statusText}: ${responseText}`,
+    );
+  }
+
+  let result;
+  try {
+    result = await response.json();
+  } catch (error) {
+    throw new Error(`Shelly device at ${ip} returned invalid JSON: ${error.message}`);
+  }
+
+  if (!result || typeof result !== 'object') {
+    throw new Error(`Shelly device at ${ip} returned an unexpected payload`);
+  }
+
+  return result;
+}
+
 function addToHistory(sample) {
   metricsHistory.push(sample);
   if (metricsHistory.length > MAX_SAMPLES) {
@@ -166,20 +216,49 @@ app.post('/api/devices/:id/actions', async (req, res) => {
     switch (device.type) {
       case 'switch': {
         const { action, on } = req.body ?? {};
+        let desiredOn;
+
         if (action === 'toggle') {
-          updatedDevice = await updateDeviceState(deviceId, (state) => ({
-            ...state,
-            on: !(state.on ?? false),
-          }));
+          desiredOn = !(device.state?.on ?? false);
         } else if (typeof on === 'boolean') {
-          updatedDevice = await updateDeviceState(deviceId, (state) => ({
-            ...state,
-            on,
-          }));
+          desiredOn = on;
         } else {
           return res.status(400).json({
             error: 'Switch actions require { action: "toggle" } or { on: boolean }',
           });
+        }
+
+        if (device.integration?.type === 'shelly-gen3') {
+          const shellyResult = await applyShellySwitchState(device, desiredOn);
+          const shellyOn = typeof shellyResult.on === 'boolean' ? shellyResult.on : desiredOn;
+          const extraState = {};
+
+          if (shellyResult && typeof shellyResult === 'object') {
+            const { source, timer_started, timer_duration, has_timer } = shellyResult;
+            if (source !== undefined) {
+              extraState.source = source;
+            }
+            if (timer_started !== undefined) {
+              extraState.timer_started = timer_started;
+            }
+            if (timer_duration !== undefined) {
+              extraState.timer_duration = timer_duration;
+            }
+            if (has_timer !== undefined) {
+              extraState.has_timer = has_timer;
+            }
+          }
+
+          updatedDevice = await updateDeviceState(deviceId, (state) => ({
+            ...state,
+            ...extraState,
+            on: shellyOn,
+          }));
+        } else {
+          updatedDevice = await updateDeviceState(deviceId, (state) => ({
+            ...state,
+            on: desiredOn,
+          }));
         }
         break;
       }
@@ -211,7 +290,8 @@ app.post('/api/devices/:id/actions', async (req, res) => {
     res.json(updatedDevice);
   } catch (error) {
     console.error(`Failed to update device ${deviceId}:`, error);
-    res.status(500).json({ error: 'Failed to update device state' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: `Failed to update device state: ${errorMessage}` });
   }
 });
 
