@@ -2,12 +2,18 @@
   <div class="devices">
     <header class="devices__header">
       <h1>Devices</h1>
-      <button class="refresh-button" type="button" @click="refreshDevices" :disabled="loading">
-        {{ loading ? 'Refreshing…' : 'Refresh' }}
+      <button
+        class="refresh-button"
+        type="button"
+        @click="refreshDevices"
+        :disabled="isRefreshing"
+        :aria-busy="isRefreshing"
+      >
+        {{ isRefreshing ? 'Refreshing…' : 'Refresh' }}
       </button>
     </header>
 
-    <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+    <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
 
     <section v-if="devices.length" class="device-grid">
       <article class="device-card" v-for="device in devices" :key="device.id">
@@ -21,11 +27,18 @@
             <p class="device-state">Status: {{ device.state?.on ? 'On' : 'Off' }}</p>
             <button
               class="action-button"
+              :class="[
+                device.state?.on ? 'action-button--on' : 'action-button--off',
+                { 'action-button--pending': isDevicePending(device.id) }
+              ]"
               type="button"
-              @click="() => toggleSwitch(device)"
-              :disabled="loading"
+              @click="toggleSwitch(device)"
+              :disabled="isRefreshing || isDevicePending(device.id)"
+              :aria-pressed="device.state?.on ?? false"
+              :aria-busy="isDevicePending(device.id)"
             >
-              Toggle
+              <span class="power-icon" aria-hidden="true">⏻</span>
+              <span class="action-label">{{ device.state?.on ? 'Turn off' : 'Turn on' }}</span>
             </button>
           </template>
 
@@ -41,7 +54,8 @@
               step="1"
               :id="`dimmer-${device.id}`"
               :value="device.state?.level ?? 0"
-              :disabled="loading"
+              :disabled="isRefreshing || isDevicePending(device.id)"
+              :aria-busy="isDevicePending(device.id)"
               @change="(event) => updateDimmer(device, Number.parseInt(event.target.value, 10))"
             />
           </template>
@@ -62,7 +76,7 @@
       </article>
     </section>
 
-    <p v-else-if="!loading" class="empty-state">No devices configured yet.</p>
+    <p v-else-if="!isRefreshing" class="empty-state">No devices configured yet.</p>
   </div>
 </template>
 
@@ -71,8 +85,21 @@ import { onMounted, ref } from 'vue'
 import axios from 'axios'
 
 const devices = ref([])
-const loading = ref(false)
+const isRefreshing = ref(false)
 const errorMessage = ref('')
+const pendingDeviceIds = ref(new Set())
+
+const isDevicePending = (deviceId) => pendingDeviceIds.value.has(deviceId)
+
+const setPendingState = (deviceId, isPending) => {
+  const next = new Set(pendingDeviceIds.value)
+  if (isPending) {
+    next.add(deviceId)
+  } else {
+    next.delete(deviceId)
+  }
+  pendingDeviceIds.value = next
+}
 
 const handleError = (error) => {
   console.error('Failed to interact with device API:', error)
@@ -87,7 +114,10 @@ const handleError = (error) => {
 }
 
 const refreshDevices = async () => {
-  loading.value = true
+  if (isRefreshing.value) {
+    return
+  }
+  isRefreshing.value = true
   errorMessage.value = ''
 
   try {
@@ -96,7 +126,7 @@ const refreshDevices = async () => {
   } catch (error) {
     handleError(error)
   } finally {
-    loading.value = false
+    isRefreshing.value = false
   }
 }
 
@@ -110,36 +140,30 @@ const updateDeviceInList = (nextDevice) => {
   devices.value.splice(index, 1, nextDevice)
 }
 
-const toggleSwitch = async (device) => {
-  loading.value = true
+const performDeviceAction = async (device, payload) => {
+  if (isDevicePending(device.id)) {
+    return
+  }
+  setPendingState(device.id, true)
   errorMessage.value = ''
   try {
-    const { data } = await axios.post(`/api/devices/${device.id}/actions`, {
-      action: 'toggle',
-    })
+    const { data } = await axios.post(`/api/devices/${device.id}/actions`, payload)
     updateDeviceInList(data)
   } catch (error) {
     handleError(error)
   } finally {
-    loading.value = false
+    setPendingState(device.id, false)
   }
+}
+
+const toggleSwitch = async (device) => {
+  await performDeviceAction(device, { action: 'toggle' })
 }
 
 const updateDimmer = async (device, level) => {
   if (!Number.isFinite(level)) return
 
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const { data } = await axios.post(`/api/devices/${device.id}/actions`, {
-      level,
-    })
-    updateDeviceInList(data)
-  } catch (error) {
-    handleError(error)
-  } finally {
-    loading.value = false
-  }
+  await performDeviceAction(device, { level })
 }
 
 const formatSensorReading = (state) => {
@@ -247,27 +271,72 @@ onMounted(() => {
 
 .action-button {
   align-self: flex-start;
-  padding: 0.5rem 1rem;
-  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.75rem;
+  border-radius: 999px;
   border: none;
-  background: #10b981;
+  font-size: 1.05rem;
+  font-weight: 700;
   color: #fff;
-  font-weight: 600;
   cursor: pointer;
-  transition: background-color 150ms ease-in-out, transform 150ms ease-in-out;
+  transition: transform 150ms ease-in-out, box-shadow 150ms ease-in-out, background-color 150ms ease-in-out;
+}
+
+.action-button--on {
+  background: #16a34a;
+  box-shadow: 0 12px 25px rgba(22, 163, 74, 0.2);
+}
+
+.action-button--off {
+  background: #dc2626;
+  box-shadow: 0 12px 25px rgba(220, 38, 38, 0.2);
 }
 
 .action-button:disabled {
-  background: #6ee7b7;
   cursor: not-allowed;
+  opacity: 0.7;
+  box-shadow: none;
 }
 
-.action-button:not(:disabled):hover {
-  background: #059669;
+.action-button--pending {
+  position: relative;
+}
+
+.action-button--pending::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(15, 23, 42, 0.15);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.action-button--on:not(:disabled):hover {
+  background: #15803d;
+}
+
+.action-button--off:not(:disabled):hover {
+  background: #b91c1c;
 }
 
 .action-button:not(:disabled):active {
-  transform: scale(0.97);
+  transform: scale(0.96);
+}
+
+.action-button:focus-visible {
+  outline: 3px solid rgba(250, 204, 21, 0.9);
+  outline-offset: 4px;
+}
+
+.power-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.action-label {
+  letter-spacing: 0.04em;
 }
 
 .slider-label {
@@ -318,6 +387,18 @@ onMounted(() => {
   .error {
     color: #fecaca;
     background: rgba(239, 68, 68, 0.2);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0.25;
   }
 }
 </style>
