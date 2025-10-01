@@ -23,5 +23,18 @@
       "value": 21.5,
       "unit": "°C"
     }
+  },
+  {
+    "id": "shelly1plus-relay",
+    "name": "Shelly 1 Plus Relay",
+    "type": "switch",
+    "integration": {
+      "type": "shelly-gen3",
+      "ip": "192.168.0.122",
+      "switchId": 0
+    },
+    "state": {
+      "on": false
+    }
   }
 ]
