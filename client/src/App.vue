@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import Dashboard from './views/Dashboard.vue'
 import Devices from './views/Devices.vue'
+import RoomPiLogo from './assets/roompi-logo.svg'
 
 const activeView = ref('dashboard')
 
@@ -14,6 +15,10 @@ const isActive = (view) => activeView.value === view
 
 <template>
   <main class="app-shell">
+    <header class="app-header">
+      <img :src="RoomPiLogo" alt="RoomPi" class="app-header__logo" />
+      <h1 class="app-header__title">RoomPi</h1>
+    </header>
     <nav class="nav">
       <button
         type="button"
@@ -46,6 +51,30 @@ const isActive = (view) => activeView.value === view
   background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
   display: flex;
   flex-direction: column;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2.5rem 2rem 1rem;
+  color: #0f172a;
+  text-align: center;
+}
+
+.app-header__logo {
+  width: 3.25rem;
+  height: 3.25rem;
+  flex-shrink: 0;
+  filter: drop-shadow(0 12px 24px rgba(99, 102, 241, 0.35));
+}
+
+.app-header__title {
+  font-size: clamp(2.25rem, 4vw, 3.25rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0;
 }
 
 .nav {
@@ -85,6 +114,14 @@ const isActive = (view) => activeView.value === view
 @media (prefers-color-scheme: dark) {
   .app-shell {
     background: radial-gradient(circle at top, #1e293b 0%, #020617 100%);
+  }
+
+  .app-header {
+    color: #e2e8f0;
+  }
+
+  .app-header__logo {
+    filter: drop-shadow(0 16px 32px rgba(14, 116, 144, 0.55));
   }
 
   .nav__button {
