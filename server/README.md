@@ -24,7 +24,7 @@ node index.js
 
 The server listens on port `3000` by default. Override the port or sampling behaviour with environment variables:
 
-- `PORT` – HTTP port to listen on (default: `3000`)
+- `PORT` – HTTP port to listen on (default: `3000`; accepts `0` for an ephemeral port, values outside `0-65535` fall back to the default)
 - `SAMPLE_INTERVAL_MS` – Interval between metric samples stored in history (default: `1000` ms)
 - `MAX_METRIC_SAMPLES` – Maximum number of samples kept in the ring buffer (default: `1000`)
 
