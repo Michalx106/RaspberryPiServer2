@@ -11,5 +11,22 @@
     "state": {
       "on": false
     }
+  },
+  {
+    "id": "bedroom-dimmer",
+    "name": "Bedroom Dimmer",
+    "type": "dimmer",
+    "state": {
+      "level": 42
+    }
+  },
+  {
+    "id": "rack-temperature-sensor",
+    "name": "Rack Temperature Sensor",
+    "type": "sensor",
+    "state": {
+      "temperatureC": 24.2,
+      "humidityPercent": 40
+    }
   }
 ]

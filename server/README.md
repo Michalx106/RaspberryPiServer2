@@ -45,9 +45,13 @@ The server listens on port `3000` by default. Override the port or sampling beha
     - `dimmer` – Range-based devices. Accepts `{ "level": 0-100 }` and stores the value in `state.level`.
     - `sensor` – Read-only devices. They expose data from `state` but reject write actions.
   - `state` – Arbitrary JSON payload that captures the current state. Update handlers persist the full object back to disk.
+- Sample entries ship with the repository so the manual tests below can run end-to-end:
+  - `shelly1plus-relay` – A Shelly Plus 1 relay exposed as a `switch`. Its state synchronises with the physical device using the `integration` block (`type: "shelly-gen3"`, `ip`, and `switchId`).
+  - `bedroom-dimmer` – A virtual `dimmer` whose `state.level` defaults to `42`. Posting a new level updates both the in-memory state and `devices.json`.
+  - `rack-temperature-sensor` – A read-only `sensor` that publishes `state.temperatureC` and `state.humidityPercent`.
 - **Manual test plan:**
   1. Start the server (`node index.js`) and verify that `GET /api/devices` returns the contents of `devices.json`.
-  2. Send `POST /api/devices/shelly1plus-relay/actions` with `{ "action": "toggle" }` and ensure the response flips `state.on` and that `devices.json` updates accordingly.
+  2. Send `POST /api/devices/shelly1plus-relay/actions` with `{ "action": "toggle" }` and ensure the response flips `state.on` and that `devices.json` updates accordingly (the server will also call the Shelly REST API using the metadata from the sample entry).
   3. Send `POST /api/devices/bedroom-dimmer/actions` with `{ "level": 75 }` and confirm the response shows the new `state.level` and the file persists the change.
   4. Attempt to POST to the `rack-temperature-sensor` device and verify a `400` error is returned indicating the device is read-only.
   5. Refresh the frontend Devices view and confirm that device states match the latest updates.
