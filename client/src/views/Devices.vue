@@ -187,8 +187,10 @@ onMounted(() => {
 .devices {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  padding: clamp(1.5rem, 2.5vw, 3rem);
+  gap: 2rem;
+  padding: 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
 .devices__header {
@@ -225,14 +227,14 @@ onMounted(() => {
 .device-grid {
   display: grid;
   gap: 1.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .device-card {
-  background: rgba(255, 255, 255, 0.9);
+  background: #ffffff;
   border-radius: 1rem;
-  padding: 1.25rem;
-  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.08);
+  padding: 1.5rem;
+  box-shadow: 0 10px 25px -15px rgba(15, 23, 42, 0.3);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -366,8 +368,9 @@ onMounted(() => {
 
 @media (prefers-color-scheme: dark) {
   .device-card {
-    background: rgba(15, 23, 42, 0.85);
+    background: #0f172a;
     color: #e2e8f0;
+    box-shadow: 0 10px 25px -20px rgba(15, 23, 42, 0.9);
   }
 
   .device-state,
