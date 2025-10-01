@@ -1,0 +1,15 @@
+[
+  {
+    "id": "shelly1plus-relay",
+    "name": "Bedroom Light",
+    "type": "switch",
+    "integration": {
+      "type": "shelly-gen3",
+      "ip": "192.168.0.122",
+      "switchId": 0
+    },
+    "state": {
+      "on": false
+    }
+  }
+]

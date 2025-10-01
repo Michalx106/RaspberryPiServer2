@@ -32,6 +32,25 @@ The server listens on port `3001` by default. Override the port or sampling beha
 
 - `GET /api/metrics/current` – Returns a fresh snapshot collected on request.
 - `GET /api/metrics/history` – Returns the in-memory history of recent samples.
+- `GET /api/devices` – Returns the list of devices loaded from `devices.json`, including current in-memory state.
+- `POST /api/devices/:id/actions` – Applies an action to the specified device. Supported actions depend on the `type` field (see below).
+
+### Device configuration and manual tests
+
+- Device definitions live in [`devices.json`](./devices.json). The file contains an array of objects with the following fields:
+  - `id` – A unique identifier used by the API and frontend.
+  - `name` – Human readable label displayed in the UI.
+  - `type` – Determines how actions are handled. Supported values:
+    - `switch` – Boolean devices. Accepts `{ "action": "toggle" }` to flip state or `{ "on": boolean }` to set explicitly. State is stored under `state.on`.
+    - `dimmer` – Range-based devices. Accepts `{ "level": 0-100 }` and stores the value in `state.level`.
+    - `sensor` – Read-only devices. They expose data from `state` but reject write actions.
+  - `state` – Arbitrary JSON payload that captures the current state. Update handlers persist the full object back to disk.
+- **Manual test plan:**
+  1. Start the server (`node index.js`) and verify that `GET /api/devices` returns the contents of `devices.json`.
+  2. Send `POST /api/devices/living-room-light/actions` with `{ "action": "toggle" }` and ensure the response flips `state.on` and that `devices.json` updates accordingly.
+  3. Send `POST /api/devices/bedroom-dimmer/actions` with `{ "level": 75 }` and confirm the response shows the new `state.level` and the file persists the change.
+  4. Attempt to POST to a sensor device and verify a `400` error is returned indicating the device is read-only.
+  5. Refresh the frontend Devices view and confirm that device states match the latest updates.
 
 ## Keeping the server running
 
