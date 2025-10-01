@@ -1,4 +1,4 @@
-export async function applyShellySwitchState(device, desiredOn) {
+function getShellySwitchIntegration(device) {
   const integration = device.integration;
   if (!integration || integration.type !== 'shelly-gen3') {
     throw new Error('Shelly integration is not configured for this device');
@@ -12,7 +12,11 @@ export async function applyShellySwitchState(device, desiredOn) {
     throw new Error('Shelly integration is missing the switch identifier');
   }
 
-  const url = `http://${ip}/rpc/Switch.Set`;
+  return { ip, switchId };
+}
+
+async function performShellyRequest({ ip, path, body }) {
+  const url = `http://${ip}${path}`;
   let response;
 
   try {
@@ -21,7 +25,7 @@ export async function applyShellySwitchState(device, desiredOn) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ id: switchId, on: desiredOn }),
+      body: JSON.stringify(body),
     });
   } catch (error) {
     throw new Error(`Failed to connect to Shelly device at ${ip}: ${error.message}`);
@@ -46,4 +50,24 @@ export async function applyShellySwitchState(device, desiredOn) {
   }
 
   return result;
+}
+
+export async function applyShellySwitchState(device, desiredOn) {
+  const { ip, switchId } = getShellySwitchIntegration(device);
+
+  return performShellyRequest({
+    ip,
+    path: '/rpc/Switch.Set',
+    body: { id: switchId, on: desiredOn },
+  });
+}
+
+export async function fetchShellySwitchState(device) {
+  const { ip, switchId } = getShellySwitchIntegration(device);
+
+  return performShellyRequest({
+    ip,
+    path: '/rpc/Switch.GetStatus',
+    body: { id: switchId },
+  });
 }

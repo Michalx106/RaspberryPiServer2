@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { findDeviceById, listDevices, updateDeviceState } from '../deviceStore.js';
-import { applyShellySwitchState } from '../shellyIntegration.js';
+import { applyShellySwitchState, fetchShellySwitchState } from '../shellyIntegration.js';
 
 const router = Router();
 
@@ -24,9 +24,26 @@ router.post('/:id/actions', async (req, res) => {
       case 'switch': {
         const { action, on } = req.body ?? {};
         let desiredOn;
+        let currentOn = device.state?.on ?? false;
+
+        if (device.integration?.type === 'shelly-gen3' && action === 'toggle') {
+          try {
+            const shellyStatus = await fetchShellySwitchState(device);
+            if (shellyStatus && typeof shellyStatus.output === 'boolean') {
+              currentOn = shellyStatus.output;
+            } else if (shellyStatus && typeof shellyStatus.on === 'boolean') {
+              currentOn = shellyStatus.on;
+            }
+          } catch (statusError) {
+            console.warn(
+              `Failed to read current state from Shelly device ${deviceId}:`,
+              statusError,
+            );
+          }
+        }
 
         if (action === 'toggle') {
-          desiredOn = !(device.state?.on ?? false);
+          desiredOn = !currentOn;
         } else if (typeof on === 'boolean') {
           desiredOn = on;
         } else {
@@ -37,11 +54,28 @@ router.post('/:id/actions', async (req, res) => {
 
         if (device.integration?.type === 'shelly-gen3') {
           const shellyResult = await applyShellySwitchState(device, desiredOn);
-          const shellyOn = typeof shellyResult.on === 'boolean' ? shellyResult.on : desiredOn;
+          let shellyOn = desiredOn;
           const extraState = {};
 
-          if (shellyResult && typeof shellyResult === 'object') {
-            const { source, timer_started, timer_duration, has_timer } = shellyResult;
+          const mergeShellyPayload = (payload) => {
+            if (!payload || typeof payload !== 'object') {
+              return;
+            }
+
+            const {
+              source,
+              timer_started,
+              timer_duration,
+              has_timer,
+              timer_remaining,
+            } = payload;
+
+            if (typeof payload.output === 'boolean') {
+              shellyOn = payload.output;
+            } else if (typeof payload.on === 'boolean') {
+              shellyOn = payload.on;
+            }
+
             if (source !== undefined) {
               extraState.source = source;
             }
@@ -51,9 +85,24 @@ router.post('/:id/actions', async (req, res) => {
             if (timer_duration !== undefined) {
               extraState.timer_duration = timer_duration;
             }
+            if (timer_remaining !== undefined) {
+              extraState.timer_remaining = timer_remaining;
+            }
             if (has_timer !== undefined) {
               extraState.has_timer = has_timer;
             }
+          };
+
+          mergeShellyPayload(shellyResult);
+
+          try {
+            const shellyStatus = await fetchShellySwitchState(device);
+            mergeShellyPayload(shellyStatus);
+          } catch (statusError) {
+            console.warn(
+              `Failed to refresh state from Shelly device ${deviceId} after update:`,
+              statusError,
+            );
           }
 
           updatedDevice = await updateDeviceState(deviceId, (state) => ({
