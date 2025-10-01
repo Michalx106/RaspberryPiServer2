@@ -22,10 +22,10 @@ Start the metrics API:
 node index.js
 ```
 
-The server listens on port `3001` by default. Override the port or sampling behaviour with environment variables:
+The server listens on port `3000` by default. Override the port or sampling behaviour with environment variables:
 
-- `PORT` – HTTP port to listen on (default: `3001`)
-- `SAMPLE_INTERVAL_MS` – Interval between metric samples stored in history (default: `5000` ms)
+- `PORT` – HTTP port to listen on (default: `3000`)
+- `SAMPLE_INTERVAL_MS` – Interval between metric samples stored in history (default: `1000` ms)
 - `MAX_METRIC_SAMPLES` – Maximum number of samples kept in the ring buffer (default: `1000`)
 
 ### API Endpoints
@@ -47,9 +47,9 @@ The server listens on port `3001` by default. Override the port or sampling beha
   - `state` – Arbitrary JSON payload that captures the current state. Update handlers persist the full object back to disk.
 - **Manual test plan:**
   1. Start the server (`node index.js`) and verify that `GET /api/devices` returns the contents of `devices.json`.
-  2. Send `POST /api/devices/living-room-light/actions` with `{ "action": "toggle" }` and ensure the response flips `state.on` and that `devices.json` updates accordingly.
+  2. Send `POST /api/devices/shelly1plus-relay/actions` with `{ "action": "toggle" }` and ensure the response flips `state.on` and that `devices.json` updates accordingly.
   3. Send `POST /api/devices/bedroom-dimmer/actions` with `{ "level": 75 }` and confirm the response shows the new `state.level` and the file persists the change.
-  4. Attempt to POST to a sensor device and verify a `400` error is returned indicating the device is read-only.
+  4. Attempt to POST to the `rack-temperature-sensor` device and verify a `400` error is returned indicating the device is read-only.
   5. Refresh the frontend Devices view and confirm that device states match the latest updates.
 
 ## Keeping the server running
