@@ -22,7 +22,7 @@
       <div class="chart-wrapper">
         <canvas
           ref="chartCanvas"
-          aria-label="Line chart showing CPU, Memory, and Temperature history"
+          aria-label="Line chart showing CPU, Memory, Disk, and Temperature history"
           role="img"
         ></canvas>
       </div>
@@ -66,6 +66,7 @@ const errorMessage = ref('')
 const currentMetrics = ref({
   cpu: null,
   memory: null,
+  disk: null,
   temperature: null,
   timestamp: null,
 })
@@ -199,6 +200,11 @@ const metricCards = computed(() => [
     description: 'Current memory consumption',
   },
   {
+    label: 'Disk Usage',
+    value: currentMetrics.value.disk !== null ? `${currentMetrics.value.disk.toFixed(1)}%` : null,
+    description: 'Current disk utilization',
+  },
+  {
     label: 'Temperature',
     value: currentMetrics.value.temperature !== null ? `${currentMetrics.value.temperature.toFixed(1)}°C` : null,
     description: 'Current system temperature',
@@ -248,6 +254,7 @@ const mapCurrentMetrics = (data) => {
     return {
       cpu: null,
       memory: null,
+      disk: null,
       temperature: null,
       timestamp: null,
     }
@@ -261,12 +268,20 @@ const mapCurrentMetrics = (data) => {
       ? (memoryUsed / memoryTotal) * 100
       : null
 
+  const diskUsed = toFiniteNumber(data?.disk?.used)
+  const diskTotal = toFiniteNumber(data?.disk?.total)
+  const diskPercent =
+    diskUsed !== null && diskTotal !== null && diskTotal !== 0
+      ? (diskUsed / diskTotal) * 100
+      : null
+
   const temperatureMain = toFiniteNumber(data?.temperature?.main)
   const temperatureMax = toFiniteNumber(data?.temperature?.max)
 
   return {
     cpu: cpuLoad,
     memory: memoryPercent,
+    disk: diskPercent,
     temperature: temperatureMain ?? temperatureMax,
     timestamp: data?.timestamp ?? null,
   }
@@ -278,6 +293,7 @@ const mapHistorySample = (sample) => {
       timestamp: null,
       cpu: null,
       memory: null,
+      disk: null,
       temperature: null,
     }
   }
@@ -290,6 +306,13 @@ const mapHistorySample = (sample) => {
       ? (memoryUsed / memoryTotal) * 100
       : null
 
+  const diskUsed = toFiniteNumber(sample?.disk?.used)
+  const diskTotal = toFiniteNumber(sample?.disk?.total)
+  const diskPercent =
+    diskUsed !== null && diskTotal !== null && diskTotal !== 0
+      ? (diskUsed / diskTotal) * 100
+      : null
+
   const temperatureMain = toFiniteNumber(sample?.temperature?.main)
   const temperatureMax = toFiniteNumber(sample?.temperature?.max)
 
@@ -297,6 +320,7 @@ const mapHistorySample = (sample) => {
     timestamp: sample?.timestamp ?? null,
     cpu: cpuLoad,
     memory: memoryPercent,
+    disk: diskPercent,
     temperature: temperatureMain ?? temperatureMax,
   }
 }
@@ -374,6 +398,7 @@ const renderChart = () => {
   const datasets = [
     buildDataset('CPU Usage (%)', 'cpu', '#0ea5e9'),
     buildDataset('Memory Usage (%)', 'memory', '#22c55e'),
+    buildDataset('Disk Usage (%)', 'disk', '#a855f7'),
     buildDataset('Temperature (°C)', 'temperature', '#f97316'),
   ].filter(datasetHasFiniteValues)
 
