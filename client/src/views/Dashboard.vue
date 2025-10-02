@@ -9,6 +9,7 @@
           <span v-if="card.value !== null">{{ card.value }}</span>
           <span v-else>--</span>
         </p>
+        <p v-if="card.subValue" class="sub-value">{{ card.subValue }}</p>
         <p class="description">{{ card.description }}</p>
       </article>
     </section>
@@ -66,6 +67,8 @@ const errorMessage = ref('')
 const currentMetrics = ref({
   cpu: null,
   memory: null,
+  memoryUsedBytes: null,
+  memoryTotalBytes: null,
   disk: null,
   temperature: null,
   timestamp: null,
@@ -188,40 +191,68 @@ const lastUpdated = computed(() => {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString()
 })
 
-const metricCards = computed(() => [
-  {
-    label: 'CPU Usage',
-    value:
-      currentMetrics.value.cpu !== null
-        ? `${currentMetrics.value.cpu.toFixed(1)}%`
-        : null,
-    description: 'Current CPU utilization',
-  },
-  {
-    label: 'Memory Usage',
-    value:
-      currentMetrics.value.memory !== null
-        ? `${currentMetrics.value.memory.toFixed(1)}%`
-        : null,
-    description: 'Current memory consumption',
-  },
-  {
-    label: 'Disk Usage',
-    value:
-      currentMetrics.value.disk !== null
-        ? `${currentMetrics.value.disk.toFixed(1)}%`
-        : null,
-    description: 'Current disk utilization',
-  },
-  {
-    label: 'Temperature',
-    value:
-      currentMetrics.value.temperature !== null
-        ? `${currentMetrics.value.temperature.toFixed(1)}°C`
-        : null,
-    description: 'Current system temperature',
-  },
-])
+const formatBytes = (value) => {
+  if (!Number.isFinite(value)) return null
+  if (value === 0) return '0 B'
+
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']
+  const exponent = Math.min(
+    units.length - 1,
+    Math.max(0, Math.floor(Math.log(value) / Math.log(1024)))
+  )
+  const scaledValue = value / 1024 ** exponent
+  const decimals = scaledValue >= 100 ? 0 : scaledValue >= 10 ? 1 : 2
+
+  return `${scaledValue.toFixed(decimals)} ${units[exponent]}`
+}
+
+const metricCards = computed(() => {
+  const memoryUsedLabel = formatBytes(currentMetrics.value.memoryUsedBytes)
+  const memoryTotalLabel = formatBytes(currentMetrics.value.memoryTotalBytes)
+  const memoryBreakdown =
+    memoryUsedLabel && memoryTotalLabel
+      ? `${memoryUsedLabel} / ${memoryTotalLabel}`
+      : null
+
+  return [
+    {
+      label: 'CPU Usage',
+      value:
+        currentMetrics.value.cpu !== null
+          ? `${currentMetrics.value.cpu.toFixed(1)}%`
+          : null,
+      description: 'Current CPU utilization',
+      subValue: null,
+    },
+    {
+      label: 'Memory Usage',
+      value:
+        currentMetrics.value.memory !== null
+          ? `${currentMetrics.value.memory.toFixed(1)}%`
+          : null,
+      description: 'Current memory consumption',
+      subValue: memoryBreakdown,
+    },
+    {
+      label: 'Disk Usage',
+      value:
+        currentMetrics.value.disk !== null
+          ? `${currentMetrics.value.disk.toFixed(1)}%`
+          : null,
+      description: 'Current disk utilization',
+      subValue: null,
+    },
+    {
+      label: 'Temperature',
+      value:
+        currentMetrics.value.temperature !== null
+          ? `${currentMetrics.value.temperature.toFixed(1)}°C`
+          : null,
+      description: 'Current system temperature',
+      subValue: null,
+    },
+  ]
+})
 
 const REFRESH_INTERVAL_MS = 1000
 
@@ -266,6 +297,8 @@ const mapCurrentMetrics = (data) => {
     return {
       cpu: null,
       memory: null,
+      memoryUsedBytes: null,
+      memoryTotalBytes: null,
       disk: null,
       temperature: null,
       timestamp: null,
@@ -293,6 +326,8 @@ const mapCurrentMetrics = (data) => {
   return {
     cpu: cpuLoad,
     memory: memoryPercent,
+    memoryUsedBytes: memoryUsed !== null ? memoryUsed : null,
+    memoryTotalBytes: memoryTotal !== null ? memoryTotal : null,
     disk: diskPercent,
     temperature: temperatureMain ?? temperatureMax,
     timestamp: data?.timestamp ?? null,
@@ -558,6 +593,12 @@ h1 {
   color: #111827;
 }
 
+.card .sub-value {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #374151;
+}
+
 .card .description {
   font-size: 0.9rem;
   color: #6b7280;
@@ -629,6 +670,10 @@ h1 {
   .card .description,
   .chart-section p {
     color: #cbd5f5;
+  }
+
+  .card .sub-value {
+    color: #e2e8f0;
   }
 
   .error {
