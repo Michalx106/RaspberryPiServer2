@@ -6,8 +6,99 @@ import {
   extractShellySwitchState,
   fetchShellySwitchState,
 } from '../shellyIntegration.js';
+import { RACK_TEMPERATURE_SENSOR_URL } from '../config.js';
 
 const router = Router();
+
+const RACK_TEMPERATURE_SENSOR_ID = 'rack-temperature-sensor';
+
+async function refreshRackTemperatureSensor() {
+  const device = findDeviceById(RACK_TEMPERATURE_SENSOR_ID);
+  if (!device) {
+    return;
+  }
+
+  let response;
+  try {
+    response = await fetch(RACK_TEMPERATURE_SENSOR_URL, {
+      headers: { Accept: 'application/json' },
+    });
+  } catch (error) {
+    console.warn(
+      `Failed to connect to rack temperature sensor at ${RACK_TEMPERATURE_SENSOR_URL}:`,
+      error,
+    );
+    return;
+  }
+
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => '');
+    console.warn(
+      `Rack temperature sensor at ${RACK_TEMPERATURE_SENSOR_URL} responded with ${response.status} ${response.statusText}: ${responseText}`,
+    );
+    return;
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    console.warn('Rack temperature sensor returned invalid JSON payload:', error);
+    return;
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    console.warn('Rack temperature sensor returned an unexpected payload:', payload);
+    return;
+  }
+
+  const existingState = device.state ?? {};
+  const statePatch = {};
+
+  if (Number.isFinite(payload.temperature_c)) {
+    statePatch.temperatureC = payload.temperature_c;
+  }
+
+  if (Number.isFinite(payload.humidity_pct)) {
+    statePatch.humidityPercent = payload.humidity_pct;
+  }
+
+  if (Number.isFinite(payload.uptime_ms)) {
+    statePatch.uptimeMs = payload.uptime_ms;
+  }
+
+  if (typeof payload.stale === 'boolean') {
+    statePatch.stale = payload.stale;
+  }
+
+  if (typeof payload.sensor === 'string' && payload.sensor.trim()) {
+    statePatch.sensor = payload.sensor.trim();
+  }
+
+  if (typeof payload.pin === 'string' && payload.pin.trim()) {
+    statePatch.pin = payload.pin.trim();
+  }
+
+  const nextState = { ...existingState, ...statePatch };
+  const comparisonKeys = new Set([
+    ...Object.keys(existingState),
+    ...Object.keys(nextState),
+  ]);
+
+  const hasChanges = Array.from(comparisonKeys).some(
+    (key) => !Object.is(existingState[key], nextState[key]),
+  );
+
+  if (!hasChanges) {
+    return;
+  }
+
+  try {
+    await updateDeviceState(device.id, () => nextState);
+  } catch (error) {
+    console.warn('Failed to persist rack temperature sensor state:', error);
+  }
+}
 
 async function refreshShellySwitchStates() {
   const devices = listDevices();
@@ -48,9 +139,9 @@ async function refreshShellySwitchStates() {
 
 router.get('/', async (req, res) => {
   try {
-    await refreshShellySwitchStates();
+    await Promise.all([refreshShellySwitchStates(), refreshRackTemperatureSensor()]);
   } catch (error) {
-    console.warn('Unexpected error while refreshing Shelly switch states:', error);
+    console.warn('Unexpected error while refreshing device states:', error);
   }
 
   res.json(listDevices());
