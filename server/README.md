@@ -27,6 +27,7 @@ The server listens on port `3000` by default. Override the port or sampling beha
 - `PORT` – HTTP port to listen on (default: `3000`; accepts `0` for an ephemeral port, values outside `0-65535` fall back to the default)
 - `SAMPLE_INTERVAL_MS` – Interval between metric samples stored in history (default: `1000` ms)
 - `MAX_METRIC_SAMPLES` – Maximum number of samples kept in the ring buffer (default: `1000`)
+- `RACK_TEMPERATURE_SENSOR_URL` – Optional override for the rack sensor API endpoint (default: `http://192.168.0.60/api`)
 
 ### API Endpoints
 
