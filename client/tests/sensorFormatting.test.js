@@ -24,7 +24,8 @@ test('formats multi-field sensor objects with known suffixes', () => {
     avgWindow: 8,
     avgSamples: 4,
     uptimeMs: 1500,
-    stale: false
+    stale: false,
+    pin: 'D1(GPIO5)'
   })
 
   assert.equal(
@@ -32,10 +33,6 @@ test('formats multi-field sensor objects with known suffixes', () => {
     [
       'Temperature: 24.2 °C',
       'Humidity: 40 %',
-      'Temperature Avg: 24 °C',
-      'Humidity Avg: 39.5 %',
-      'Avg Window: 8',
-      'Avg Samples: 4',
       'Uptime Ms: 1500',
       'Stale: false'
     ].join('\n')
