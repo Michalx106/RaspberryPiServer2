@@ -18,10 +18,28 @@ test('preserves value/unit sensor shape', () => {
 test('formats multi-field sensor objects with known suffixes', () => {
   const reading = formatSensorReading({
     temperatureC: 24.2,
-    humidityPercent: 40
+    humidityPercent: 40,
+    temperatureAvgC: 24.0,
+    humidityAvgPercent: 39.5,
+    avgWindow: 8,
+    avgSamples: 4,
+    uptimeMs: 1500,
+    stale: false
   })
 
-  assert.equal(reading, 'Temperature: 24.2 °C\nHumidity: 40 %')
+  assert.equal(
+    reading,
+    [
+      'Temperature: 24.2 °C',
+      'Humidity: 40 %',
+      'Temperature Avg: 24 °C',
+      'Humidity Avg: 39.5 %',
+      'Avg Window: 8',
+      'Avg Samples: 4',
+      'Uptime Ms: 1500',
+      'Stale: false'
+    ].join('\n')
+  )
 })
 
 test('ignores keys with empty values and falls back when nothing remains', () => {
