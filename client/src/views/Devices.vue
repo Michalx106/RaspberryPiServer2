@@ -33,7 +33,7 @@
               ]"
               type="button"
               @click="toggleSwitch(device)"
-              :disabled="isRefreshing || isDevicePending(device.id)"
+              :disabled="isDevicePending(device.id)"
               :aria-pressed="device.state?.on ?? false"
               :aria-busy="isDevicePending(device.id)"
             >
@@ -54,7 +54,7 @@
               step="1"
               :id="`dimmer-${device.id}`"
               :value="device.state?.level ?? 0"
-              :disabled="isRefreshing || isDevicePending(device.id)"
+              :disabled="isDevicePending(device.id)"
               :aria-busy="isDevicePending(device.id)"
               @change="(event) => updateDimmer(device, Number.parseInt(event.target.value, 10))"
             />
