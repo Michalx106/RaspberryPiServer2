@@ -26,7 +26,15 @@
     "type": "sensor",
     "state": {
       "temperatureC": 24.2,
-      "humidityPercent": 40
+      "humidityPercent": 40,
+      "temperatureAvgC": 24.0,
+      "humidityAvgPercent": 39.5,
+      "avgWindow": 8,
+      "avgSamples": 4,
+      "uptimeMs": 12345,
+      "stale": false,
+      "sensor": "DHT11",
+      "pin": "D1(GPIO5)"
     }
   }
 ]

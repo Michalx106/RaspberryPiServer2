@@ -32,6 +32,14 @@ const humanize = (input) => {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
+const IGNORED_KEYS = new Set([
+  'pin',
+  'temperatureAvgC',
+  'humidityAvgPercent',
+  'avgWindow',
+  'avgSamples',
+])
+
 const normalizeKey = (key) => {
   for (const [suffix, unit] of KNOWN_SUFFIX_UNITS) {
     if (key.endsWith(suffix) && key.length > suffix.length) {
@@ -88,6 +96,7 @@ export const formatSensorReading = (state) => {
   }
 
   const formattedEntries = Object.entries(state)
+    .filter(([key]) => !IGNORED_KEYS.has(key))
     .map(([key, value]) => {
       const { label, unit } = normalizeKey(key)
       const formattedValue = formatValueWithUnit(value, unit)
