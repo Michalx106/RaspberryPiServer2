@@ -63,6 +63,22 @@ async function refreshRackTemperatureSensor() {
     statePatch.humidityPercent = payload.humidity_pct;
   }
 
+  if (Number.isFinite(payload.temperature_avg_c)) {
+    statePatch.temperatureAvgC = payload.temperature_avg_c;
+  }
+
+  if (Number.isFinite(payload.humidity_avg_pct)) {
+    statePatch.humidityAvgPercent = payload.humidity_avg_pct;
+  }
+
+  if (Number.isFinite(payload.avg_window)) {
+    statePatch.avgWindow = payload.avg_window;
+  }
+
+  if (Number.isFinite(payload.avg_samples)) {
+    statePatch.avgSamples = payload.avg_samples;
+  }
+
   if (Number.isFinite(payload.uptime_ms)) {
     statePatch.uptimeMs = payload.uptime_ms;
   }
@@ -78,6 +94,12 @@ async function refreshRackTemperatureSensor() {
   if (typeof payload.pin === 'string' && payload.pin.trim()) {
     statePatch.pin = payload.pin.trim();
   }
+
+  // Record when we last received a response from the rack sensor so the
+  // dashboard can react to refreshes even if the primary readings remain
+  // unchanged (for example when the sensor wakes from deep sleep and reports
+  // identical values).
+  statePatch.lastObservedAtIso = new Date().toISOString();
 
   const nextState = { ...existingState, ...statePatch };
   const comparisonKeys = new Set([
