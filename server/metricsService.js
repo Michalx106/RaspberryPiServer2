@@ -42,17 +42,19 @@ export async function gatherMetrics() {
 export async function sampleAndStoreMetrics() {
   try {
     const sample = await gatherMetrics();
-    appendSample(sample);
+    await appendSample(sample);
   } catch (error) {
     console.error('Failed to gather system metrics:', error);
   }
 }
 
-export function getMetricsHistory() {
+export async function getMetricsHistory() {
+  const samples = await getRecentSamples(MAX_SAMPLES);
+
   return {
     intervalMs: SAMPLE_INTERVAL_MS,
     maxSamples: MAX_SAMPLES,
-    samples: getRecentSamples(MAX_SAMPLES),
+    samples,
   };
 }
 

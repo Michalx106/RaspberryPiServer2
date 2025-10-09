@@ -73,7 +73,7 @@ Alternatively, create a `systemd` service that runs `node /path/to/RaspberryPiSe
 
 ## Persistent metrics history storage
 
-Historical samples are written to a local SQLite database using `better-sqlite3`. By default the database file lives at
+Historical samples are written to a local SQLite database using the `sqlite3` driver. By default the database file lives at
 `./data/metrics-history.db` (relative to the `server/` directory). The folder is created automatically when the server starts.
 Set the `METRICS_DB_PATH` environment variable to move the database elsewhere—relative values are resolved from the server
 directory, while absolute values are used as-is. Regardless of location, the file should be stored on persistent storage (for

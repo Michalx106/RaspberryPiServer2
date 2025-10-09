@@ -21,7 +21,7 @@ app.use('/api/metrics', metricsRoutes);
 app.use('/api/devices', deviceRoutes);
 
 await initializeDeviceStore();
-initializeMetricsHistoryStore();
+await initializeMetricsHistoryStore();
 startMetricsSampling();
 
 if (!global.__metricsServerStarted) {

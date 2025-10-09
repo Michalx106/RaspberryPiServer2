@@ -14,8 +14,14 @@ router.get('/current', async (req, res) => {
   }
 });
 
-router.get('/history', (req, res) => {
-  res.json(getMetricsHistory());
+router.get('/history', async (req, res) => {
+  try {
+    const history = await getMetricsHistory();
+    res.json(history);
+  } catch (error) {
+    console.error('Error retrieving metrics history:', error);
+    res.status(500).json({ error: 'Failed to retrieve metrics history' });
+  }
 });
 
 export default router;
