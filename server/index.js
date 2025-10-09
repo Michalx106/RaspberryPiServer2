@@ -8,8 +8,13 @@ import deviceRoutes from './routes/deviceRoutes.js';
 import { startMetricsSampling } from './metricsService.js';
 
 const app = express();
+app.disable('etag');
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/devices', deviceRoutes);
