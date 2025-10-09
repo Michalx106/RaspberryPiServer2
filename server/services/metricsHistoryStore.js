@@ -1,11 +1,19 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import sqlite3 from 'sqlite3';
+import { fileURLToPath } from 'node:url';
+
+import initSqlJs from 'sql.js';
 
 import { MAX_SAMPLES, METRICS_DB_PATH } from '../config.js';
 
+const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+const wasmDirectory = path.resolve(moduleDirectory, '../node_modules/sql.js/dist');
+
+let sqlModulePromise;
 let database;
+let databaseFilePath;
 let retentionLimit = MAX_SAMPLES;
+let operationQueue = Promise.resolve();
 
 function ensureInitialized() {
   if (!database) {
@@ -13,88 +21,82 @@ function ensureInitialized() {
   }
 }
 
-function run(sql, params = []) {
-  ensureInitialized();
-
-  return new Promise((resolve, reject) => {
-    database.run(sql, params, function onRun(error) {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve(this);
+async function getSqlModule() {
+  if (!sqlModulePromise) {
+    sqlModulePromise = initSqlJs({
+      locateFile: (fileName) => path.join(wasmDirectory, fileName),
     });
-  });
+  }
+
+  return sqlModulePromise;
 }
 
-function all(sql, params = []) {
-  ensureInitialized();
-
-  return new Promise((resolve, reject) => {
-    database.all(sql, params, (error, rows) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve(rows);
-    });
-  });
+function enqueue(action) {
+  const nextOperation = operationQueue.then(() => action());
+  operationQueue = nextOperation.catch(() => {});
+  return nextOperation;
 }
 
-function exec(sql) {
+async function persistDatabase() {
   ensureInitialized();
 
-  return new Promise((resolve, reject) => {
-    database.exec(sql, (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
+  const data = database.export();
+  const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+  await fs.writeFile(databaseFilePath, buffer);
+}
 
-      resolve();
-    });
-  });
+function pruneExcessSamples() {
+  if (retentionLimit == null) {
+    return;
+  }
+
+  database.run(
+    'DELETE FROM metrics_samples WHERE id NOT IN (SELECT id FROM metrics_samples ORDER BY id DESC LIMIT ?)',
+    [retentionLimit],
+  );
 }
 
 export async function initializeMetricsHistoryStore({
   databasePath = METRICS_DB_PATH,
   retention = MAX_SAMPLES,
 } = {}) {
-  if (database) {
-    retentionLimit = Number.isFinite(retention) && retention > 0 ? Math.floor(retention) : null;
-
-    if (retentionLimit != null) {
-      await run(
-        'DELETE FROM metrics_samples WHERE id NOT IN (SELECT id FROM metrics_samples ORDER BY id DESC LIMIT ?)',
-        [retentionLimit],
-      );
-    }
-
-    return;
-  }
-
   if (!databasePath) {
     throw new Error('A database path must be provided to initialize the metrics history store.');
   }
 
+  retentionLimit = Number.isFinite(retention) && retention > 0 ? Math.floor(retention) : null;
+
   const resolvedDatabasePath = path.resolve(databasePath);
+
+  if (database) {
+    if (resolvedDatabasePath !== databaseFilePath) {
+      databaseFilePath = resolvedDatabasePath;
+      await fs.mkdir(path.dirname(databaseFilePath), { recursive: true });
+    }
+
+    await enqueue(async () => {
+      pruneExcessSamples();
+      await persistDatabase();
+    });
+    return;
+  }
+
+  const SQL = await getSqlModule();
   await fs.mkdir(path.dirname(resolvedDatabasePath), { recursive: true });
 
-  database = await new Promise((resolve, reject) => {
-    const instance = new sqlite3.Database(resolvedDatabasePath, (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
+  let fileContents;
+  try {
+    fileContents = await fs.readFile(resolvedDatabasePath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
 
-      resolve(instance);
-    });
-  });
+  database = fileContents ? new SQL.Database(new Uint8Array(fileContents)) : new SQL.Database();
+  databaseFilePath = resolvedDatabasePath;
 
-  await exec('PRAGMA journal_mode = WAL;');
-  await exec(`
+  database.run(`
     CREATE TABLE IF NOT EXISTS metrics_samples (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL,
@@ -102,14 +104,8 @@ export async function initializeMetricsHistoryStore({
     );
   `);
 
-  retentionLimit = Number.isFinite(retention) && retention > 0 ? Math.floor(retention) : null;
-
-  if (retentionLimit != null) {
-    await run(
-      'DELETE FROM metrics_samples WHERE id NOT IN (SELECT id FROM metrics_samples ORDER BY id DESC LIMIT ?)',
-      [retentionLimit],
-    );
-  }
+  pruneExcessSamples();
+  await persistDatabase();
 }
 
 export async function appendSample(sample) {
@@ -118,14 +114,11 @@ export async function appendSample(sample) {
   const timestamp = sample?.timestamp ?? new Date().toISOString();
   const payload = JSON.stringify({ ...sample, timestamp });
 
-  await run('INSERT INTO metrics_samples (timestamp, payload) VALUES (?, ?)', [timestamp, payload]);
-
-  if (retentionLimit != null) {
-    await run(
-      'DELETE FROM metrics_samples WHERE id NOT IN (SELECT id FROM metrics_samples ORDER BY id DESC LIMIT ?)',
-      [retentionLimit],
-    );
-  }
+  await enqueue(async () => {
+    database.run('INSERT INTO metrics_samples (timestamp, payload) VALUES (?, ?)', [timestamp, payload]);
+    pruneExcessSamples();
+    await persistDatabase();
+  });
 }
 
 export async function getRecentSamples(limit) {
@@ -137,17 +130,32 @@ export async function getRecentSamples(limit) {
     return [];
   }
 
-  const rows = await all('SELECT payload FROM metrics_samples ORDER BY id DESC LIMIT ?', [effectiveLimit]);
+  return enqueue(() => {
+    const statement = database.prepare(
+      'SELECT payload FROM metrics_samples ORDER BY id DESC LIMIT ?',
+      [effectiveLimit],
+    );
 
-  return rows
-    .map((row) => {
-      try {
-        return JSON.parse(row.payload);
-      } catch (error) {
-        console.warn('Discarding malformed metrics payload from history store:', error);
-        return null;
+    try {
+      const rows = [];
+
+      while (statement.step()) {
+        rows.push(statement.getAsObject());
       }
-    })
-    .filter((value) => value != null)
-    .reverse();
+
+      return rows
+        .map((row) => {
+          try {
+            return JSON.parse(row.payload);
+          } catch (error) {
+            console.warn('Discarding malformed metrics payload from history store:', error);
+            return null;
+          }
+        })
+        .filter((value) => value != null)
+        .reverse();
+    } finally {
+      statement.free();
+    }
+  });
 }
