@@ -496,17 +496,22 @@ const refreshAllMetrics = async () => {
   // duplicate renders here.
 }
 
-const buildDataset = (label, key, color) => ({
+const buildDataset = ({ label, key, color, yAxisID, unit }) => ({
   label,
   data: historyMetrics.value.map((entry) =>
     Number.isFinite(entry?.[key]) ? entry[key] : null
   ),
-  fill: true,
+  fill: false,
   tension: 0.35,
+  spanGaps: true,
   borderColor: color,
-  backgroundColor: `${color}33`,
-  pointRadius: 3,
+  borderWidth: 2,
+  pointRadius: 2,
   pointHoverRadius: 5,
+  pointHoverBorderWidth: 2,
+  pointHoverBackgroundColor: color,
+  yAxisID,
+  unit,
 })
 
 const datasetHasFiniteValues = (dataset) =>
@@ -530,12 +535,40 @@ const renderChart = () => {
       : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   })
 
-  const datasets = [
-    buildDataset('CPU Usage (%)', 'cpu', '#0ea5e9'),
-    buildDataset('Memory Usage (%)', 'memory', '#22c55e'),
-    buildDataset('Disk Usage (%)', 'disk', '#a855f7'),
-    buildDataset('Temperature (°C)', 'temperature', '#f97316'),
-  ].filter(datasetHasFiniteValues)
+  const datasetDefinitions = [
+    {
+      label: 'CPU Usage',
+      key: 'cpu',
+      color: '#0ea5e9',
+      yAxisID: 'yPercent',
+      unit: '%',
+    },
+    {
+      label: 'Memory Usage',
+      key: 'memory',
+      color: '#22c55e',
+      yAxisID: 'yPercent',
+      unit: '%',
+    },
+    {
+      label: 'Disk Usage',
+      key: 'disk',
+      color: '#a855f7',
+      yAxisID: 'yPercent',
+      unit: '%',
+    },
+    {
+      label: 'Temperature',
+      key: 'temperature',
+      color: '#f97316',
+      yAxisID: 'yTemperature',
+      unit: '°C',
+    },
+  ]
+
+  const datasets = datasetDefinitions
+    .map((definition) => buildDataset(definition))
+    .filter(datasetHasFiniteValues)
 
   const hasHistorySamples = historyMetrics.value.length > 0
   const hasRenderableData = datasets.length > 0
@@ -565,12 +598,35 @@ const renderChart = () => {
         intersect: false,
       },
       scales: {
-        y: {
+        yPercent: {
           type: 'linear',
           beginAtZero: true,
+          suggestedMax: 100,
           title: {
             display: true,
-            text: 'Value',
+            text: 'Usage (%)',
+          },
+          ticks: {
+            callback: (value) => `${value}%`,
+          },
+          grid: {
+            color: 'rgba(148, 163, 184, 0.2)',
+          },
+        },
+        yTemperature: {
+          type: 'linear',
+          position: 'right',
+          beginAtZero: true,
+          suggestedMax: 110,
+          title: {
+            display: true,
+            text: 'Temperature (°C)',
+          },
+          ticks: {
+            callback: (value) => `${value}°C`,
+          },
+          grid: {
+            drawOnChartArea: false,
           },
         },
         x: {
@@ -579,12 +635,23 @@ const renderChart = () => {
             display: true,
             text: 'Time',
           },
+          ticks: {
+            maxRotation: 0,
+            autoSkipPadding: 10,
+          },
+          grid: {
+            color: 'rgba(148, 163, 184, 0.14)',
+          },
         },
       },
       plugins: {
         legend: {
           display: true,
           position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+          },
         },
         tooltip: {
           callbacks: {
@@ -593,7 +660,9 @@ const renderChart = () => {
               if (!Number.isFinite(value)) {
                 return `${context.dataset.label}: --`
               }
-              return `${context.dataset.label}: ${value.toFixed(1)}`
+              const unitSuffix = context.dataset?.unit ?? ''
+              const formattedValue = value.toFixed(1)
+              return `${context.dataset.label}: ${formattedValue}${unitSuffix}`
             },
           },
         },
