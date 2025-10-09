@@ -1,7 +1,21 @@
+import { EventEmitter } from 'node:events';
+
 import si from 'systeminformation';
 
 import { MAX_SAMPLES, SAMPLE_INTERVAL_MS } from './config.js';
 import { appendSample, getRecentSamples } from './services/metricsHistoryStore.js';
+
+const metricsEmitter = new EventEmitter();
+metricsEmitter.setMaxListeners(0);
+
+export const METRICS_SAMPLE_EVENT = 'sample';
+
+export const subscribeToMetrics = (listener) => {
+  metricsEmitter.on(METRICS_SAMPLE_EVENT, listener);
+  return () => {
+    metricsEmitter.off(METRICS_SAMPLE_EVENT, listener);
+  };
+};
 
 export async function gatherMetrics() {
   const [load, memory, disks, temperature] = await Promise.all([
@@ -43,6 +57,7 @@ export async function sampleAndStoreMetrics() {
   try {
     const sample = await gatherMetrics();
     await appendSample(sample);
+    metricsEmitter.emit(METRICS_SAMPLE_EVENT, sample);
   } catch (error) {
     console.error('Failed to gather system metrics:', error);
   }
@@ -60,5 +75,5 @@ export async function getMetricsHistory() {
 
 export function startMetricsSampling() {
   sampleAndStoreMetrics();
-  setInterval(sampleAndStoreMetrics, SAMPLE_INTERVAL_MS);
+  return setInterval(sampleAndStoreMetrics, SAMPLE_INTERVAL_MS);
 }

@@ -71,6 +71,16 @@ const currentMetrics = ref({
   timestamp: null,
 })
 const historyMetrics = ref([])
+const historyConfig = ref({
+  maxSamples: null,
+})
+
+const STREAM_ENDPOINT = '/api/metrics/stream'
+const FALLBACK_POLL_INTERVAL_MS = 5000
+
+let metricsStream = null
+let fallbackIntervalId = null
+let fallbackActive = false
 
 watch(
   historyMetrics,
@@ -211,42 +221,17 @@ const metricCards = computed(() => [
   },
 ])
 
-const REFRESH_INTERVAL_MS = 1000
-
-let stopPollingLoop
-
-const startPolling = (fetcher) => {
-  let timeoutId = null
-  let stopped = false
-  let inFlight = false
-
-  const run = async () => {
-    if (stopped || inFlight) return
-
-    inFlight = true
-    try {
-      await fetcher()
-    } finally {
-      inFlight = false
-      if (!stopped) {
-        timeoutId = window.setTimeout(run, REFRESH_INTERVAL_MS)
-      }
-    }
-  }
-
-  run()
-
-  return () => {
-    stopped = true
-    if (timeoutId !== null) {
-      window.clearTimeout(timeoutId)
-    }
-  }
-}
-
 const toFiniteNumber = (value) => {
   const numberValue = typeof value === 'string' ? Number.parseFloat(value) : value
   return Number.isFinite(numberValue) ? numberValue : null
+}
+
+const toPositiveInteger = (value) => {
+  const numericValue = toFiniteNumber(value)
+  if (!Number.isFinite(numericValue)) return null
+
+  const integerValue = Math.trunc(numericValue)
+  return integerValue > 0 ? integerValue : null
 }
 
 const mapCurrentMetrics = (data) => {
@@ -325,6 +310,153 @@ const mapHistorySample = (sample) => {
   }
 }
 
+const applyHistorySamples = (samples) => {
+  historyMetrics.value = Array.isArray(samples)
+    ? samples.map((sample) => mapHistorySample(sample))
+    : []
+}
+
+const updateHistoryConfig = (payload) => {
+  const maxSamples =
+    toPositiveInteger(payload?.maxSamples) ??
+    (Array.isArray(payload?.samples) ? toPositiveInteger(payload.samples.length) : null)
+
+  historyConfig.value = {
+    ...historyConfig.value,
+    maxSamples: maxSamples ?? historyConfig.value.maxSamples,
+  }
+}
+
+const appendHistorySample = (sample) => {
+  const mappedSample = mapHistorySample(sample)
+  const limit = toPositiveInteger(historyConfig.value.maxSamples)
+
+  const nextHistory = [...historyMetrics.value]
+  const lastEntry = nextHistory.at(-1)
+
+  if (lastEntry?.timestamp && lastEntry.timestamp === mappedSample.timestamp) {
+    nextHistory.splice(nextHistory.length - 1, 1, mappedSample)
+  } else {
+    nextHistory.push(mappedSample)
+  }
+
+  if (limit && nextHistory.length > limit) {
+    historyMetrics.value = nextHistory.slice(nextHistory.length - limit)
+  } else {
+    historyMetrics.value = nextHistory
+  }
+}
+
+const stopFallbackPolling = () => {
+  if (!isBrowserEnvironment() || !fallbackActive) return
+
+  fallbackActive = false
+  if (fallbackIntervalId !== null) {
+    window.clearInterval(fallbackIntervalId)
+    fallbackIntervalId = null
+  }
+}
+
+const runFallbackRefresh = async () => {
+  try {
+    await withScrollPreserved(async () => {
+      await refreshAllMetrics()
+    })
+  } catch (error) {
+    console.error('Fallback polling refresh failed', error)
+  }
+}
+
+const startFallbackPolling = () => {
+  if (!isBrowserEnvironment() || fallbackActive) return
+
+  fallbackActive = true
+  void runFallbackRefresh()
+  fallbackIntervalId = window.setInterval(() => {
+    void runFallbackRefresh()
+  }, FALLBACK_POLL_INTERVAL_MS)
+}
+
+const closeMetricsStream = () => {
+  if (!isBrowserEnvironment() || !metricsStream) return
+
+  metricsStream.close()
+  metricsStream = null
+}
+
+const parseEventData = (event) => {
+  if (!event?.data) return null
+  try {
+    return JSON.parse(event.data)
+  } catch (error) {
+    console.warn('Unable to parse metrics stream payload', error)
+    return null
+  }
+}
+
+const handleStreamOpen = () => {
+  stopFallbackPolling()
+  errorMessage.value = ''
+}
+
+const handleStreamHistory = (event) => {
+  const payload = parseEventData(event)
+  if (!payload) return
+
+  updateHistoryConfig(payload)
+  applyHistorySamples(payload?.samples)
+
+  const lastSample = Array.isArray(payload?.samples)
+    ? payload.samples.at(-1)
+    : null
+
+  if (lastSample) {
+    currentMetrics.value = mapCurrentMetrics(lastSample)
+  }
+}
+
+const handleStreamSample = (event) => {
+  const sample = parseEventData(event)
+  if (!sample) return
+
+  currentMetrics.value = mapCurrentMetrics(sample)
+  appendHistorySample(sample)
+}
+
+const handleStreamServerError = (event) => {
+  const payload = parseEventData(event)
+  if (payload?.message) {
+    errorMessage.value = payload.message
+  }
+}
+
+const handleStreamNetworkError = () => {
+  if (!fallbackActive) {
+    errorMessage.value =
+      'Live metrics stream interrupted. Switching to fallback polling.'
+    startFallbackPolling()
+  }
+}
+
+const initializeMetricsStream = () => {
+  if (!isBrowserEnvironment() || metricsStream) return
+
+  if (typeof window.EventSource !== 'function') {
+    errorMessage.value = 'Live metrics streaming is unavailable in this browser. Using fallback polling.'
+    startFallbackPolling()
+    return
+  }
+
+  const eventSource = new EventSource(STREAM_ENDPOINT)
+  metricsStream = eventSource
+
+  eventSource.addEventListener('open', handleStreamOpen)
+  eventSource.addEventListener('history', handleStreamHistory)
+  eventSource.addEventListener('sample', handleStreamSample)
+  eventSource.addEventListener('stream-error', handleStreamServerError)
+  eventSource.addEventListener('error', handleStreamNetworkError)
+}
+
 const fetchCurrentMetrics = async () => {
   const { data } = await axios.get('/api/metrics/current')
   currentMetrics.value = mapCurrentMetrics(data)
@@ -332,9 +464,8 @@ const fetchCurrentMetrics = async () => {
 
 const fetchHistoryMetrics = async () => {
   const { data } = await axios.get('/api/metrics/history')
-  historyMetrics.value = Array.isArray(data?.samples)
-    ? data.samples.map((sample) => mapHistorySample(sample))
-    : []
+  updateHistoryConfig(data)
+  applyHistorySamples(data?.samples)
 }
 
 const refreshAllMetrics = async () => {
@@ -355,23 +486,33 @@ const refreshAllMetrics = async () => {
     console.error('Failed to fetch history metrics', historyResult.reason)
   }
 
-  errorMessage.value = encounteredError ? 'Unable to refresh some metrics.' : ''
+  if (encounteredError) {
+    errorMessage.value = 'Unable to refresh some metrics.'
+  } else if (!fallbackActive) {
+    errorMessage.value = ''
+  }
 
   // Chart updates are driven by the historyMetrics watcher so we don't
   // duplicate renders here.
 }
 
-const buildDataset = (label, key, color) => ({
+const buildDataset = ({ label, key, color, yAxisID, unit }) => ({
   label,
   data: historyMetrics.value.map((entry) =>
     Number.isFinite(entry?.[key]) ? entry[key] : null
   ),
-  fill: true,
+  fill: false,
   tension: 0.35,
+  spanGaps: true,
   borderColor: color,
-  backgroundColor: `${color}33`,
-  pointRadius: 3,
-  pointHoverRadius: 5,
+  borderWidth: 2,
+  pointRadius: 0,
+  pointHoverRadius: 0,
+  pointHoverBorderWidth: 0,
+  pointHoverBackgroundColor: color,
+  pointHitRadius: 10,
+  yAxisID,
+  unit,
 })
 
 const datasetHasFiniteValues = (dataset) =>
@@ -395,12 +536,40 @@ const renderChart = () => {
       : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   })
 
-  const datasets = [
-    buildDataset('CPU Usage (%)', 'cpu', '#0ea5e9'),
-    buildDataset('Memory Usage (%)', 'memory', '#22c55e'),
-    buildDataset('Disk Usage (%)', 'disk', '#a855f7'),
-    buildDataset('Temperature (°C)', 'temperature', '#f97316'),
-  ].filter(datasetHasFiniteValues)
+  const datasetDefinitions = [
+    {
+      label: 'CPU Usage',
+      key: 'cpu',
+      color: '#0ea5e9',
+      yAxisID: 'yPercent',
+      unit: '%',
+    },
+    {
+      label: 'Memory Usage',
+      key: 'memory',
+      color: '#22c55e',
+      yAxisID: 'yPercent',
+      unit: '%',
+    },
+    {
+      label: 'Disk Usage',
+      key: 'disk',
+      color: '#a855f7',
+      yAxisID: 'yPercent',
+      unit: '%',
+    },
+    {
+      label: 'Temperature',
+      key: 'temperature',
+      color: '#f97316',
+      yAxisID: 'yTemperature',
+      unit: '°C',
+    },
+  ]
+
+  const datasets = datasetDefinitions
+    .map((definition) => buildDataset(definition))
+    .filter(datasetHasFiniteValues)
 
   const hasHistorySamples = historyMetrics.value.length > 0
   const hasRenderableData = datasets.length > 0
@@ -430,12 +599,35 @@ const renderChart = () => {
         intersect: false,
       },
       scales: {
-        y: {
+        yPercent: {
           type: 'linear',
           beginAtZero: true,
+          suggestedMax: 100,
           title: {
             display: true,
-            text: 'Value',
+            text: 'Usage (%)',
+          },
+          ticks: {
+            callback: (value) => `${value}%`,
+          },
+          grid: {
+            color: 'rgba(148, 163, 184, 0.2)',
+          },
+        },
+        yTemperature: {
+          type: 'linear',
+          position: 'right',
+          beginAtZero: true,
+          suggestedMax: 110,
+          title: {
+            display: true,
+            text: 'Temperature (°C)',
+          },
+          ticks: {
+            callback: (value) => `${value}°C`,
+          },
+          grid: {
+            drawOnChartArea: false,
           },
         },
         x: {
@@ -444,12 +636,23 @@ const renderChart = () => {
             display: true,
             text: 'Time',
           },
+          ticks: {
+            maxRotation: 0,
+            autoSkipPadding: 10,
+          },
+          grid: {
+            color: 'rgba(148, 163, 184, 0.14)',
+          },
         },
       },
       plugins: {
         legend: {
           display: true,
           position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+          },
         },
         tooltip: {
           callbacks: {
@@ -458,7 +661,9 @@ const renderChart = () => {
               if (!Number.isFinite(value)) {
                 return `${context.dataset.label}: --`
               }
-              return `${context.dataset.label}: ${value.toFixed(1)}`
+              const unitSuffix = context.dataset?.unit ?? ''
+              const formattedValue = value.toFixed(1)
+              return `${context.dataset.label}: ${formattedValue}${unitSuffix}`
             },
           },
         },
@@ -475,16 +680,14 @@ onMounted(async () => {
     window.addEventListener('scroll', handleScroll, { passive: true })
   }
 
-  await refreshAllMetrics()
+  await withScrollPreserved(async () => {
+    await refreshAllMetrics()
+  })
 
   await nextTick()
   restoreScrollPosition()
 
-  stopPollingLoop = startPolling(() =>
-    withScrollPreserved(async () => {
-      await refreshAllMetrics()
-    })
-  )
+  initializeMetricsStream()
 })
 
 onBeforeUnmount(() => {
@@ -497,7 +700,8 @@ onBeforeUnmount(() => {
     saveScrollPosition()
   }
 
-  if (stopPollingLoop) stopPollingLoop()
+  stopFallbackPolling()
+  closeMetricsStream()
   destroyChartInstance()
 })
 </script>
