@@ -1,15 +1,7 @@
 import si from 'systeminformation';
 
 import { MAX_SAMPLES, SAMPLE_INTERVAL_MS } from './config.js';
-
-const metricsHistory = [];
-
-function addToHistory(sample) {
-  metricsHistory.push(sample);
-  if (metricsHistory.length > MAX_SAMPLES) {
-    metricsHistory.splice(0, metricsHistory.length - MAX_SAMPLES);
-  }
-}
+import { appendSample, getRecentSamples } from './services/metricsHistoryStore.js';
 
 export async function gatherMetrics() {
   const [load, memory, disks, temperature] = await Promise.all([
@@ -50,17 +42,19 @@ export async function gatherMetrics() {
 export async function sampleAndStoreMetrics() {
   try {
     const sample = await gatherMetrics();
-    addToHistory(sample);
+    await appendSample(sample);
   } catch (error) {
     console.error('Failed to gather system metrics:', error);
   }
 }
 
-export function getMetricsHistory() {
+export async function getMetricsHistory() {
+  const samples = await getRecentSamples(MAX_SAMPLES);
+
   return {
     intervalMs: SAMPLE_INTERVAL_MS,
     maxSamples: MAX_SAMPLES,
-    samples: metricsHistory,
+    samples,
   };
 }
 

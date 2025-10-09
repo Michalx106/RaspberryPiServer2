@@ -6,6 +6,7 @@ import { initializeDeviceStore } from './deviceStore.js';
 import metricsRoutes from './routes/metricsRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import { startMetricsSampling } from './metricsService.js';
+import { initializeMetricsHistoryStore } from './services/metricsHistoryStore.js';
 
 const app = express();
 app.disable('etag');
@@ -20,6 +21,7 @@ app.use('/api/metrics', metricsRoutes);
 app.use('/api/devices', deviceRoutes);
 
 await initializeDeviceStore();
+await initializeMetricsHistoryStore();
 startMetricsSampling();
 
 if (!global.__metricsServerStarted) {
