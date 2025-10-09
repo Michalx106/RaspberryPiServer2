@@ -1,6 +1,6 @@
 # Raspberry Pi Metrics Dashboard (Vue 3)
 
-This project is a Vue 3 + Vite single-page application that visualizes live and historical Raspberry Pi metrics. It polls REST endpoints for current CPU/memory/temperature readings and renders a Chart.js line chart for historical trends.
+This project is a Vue 3 + Vite single-page application that visualizes live and historical Raspberry Pi metrics. It listens to a server-sent events (SSE) stream for real-time updates, falls back to REST polling if the stream is unavailable, and renders a Chart.js line chart for historical trends.
 
 ## Prerequisites
 
@@ -28,6 +28,16 @@ API requests to `/api/**` are proxied to `http://localhost:${API_PORT}`. Set `AP
 ```bash
 API_PORT=8080 npm run dev
 ```
+
+### Streaming metrics endpoint
+
+The dashboard primarily consumes a server-sent events stream exposed at `GET /api/metrics/stream`. Each connection receives:
+
+- An initial `history` event containing the latest samples (matching the `/api/metrics/history` response schema).
+- Subsequent `sample` events for every newly collected metrics sample.
+- Optional `stream-error` events when the backend cannot deliver history data.
+
+If the SSE connection cannot be established or drops, the UI automatically falls back to periodic REST polling of `/api/metrics/current` and `/api/metrics/history` until the stream reconnects.
 
 ### Type checking & linting
 

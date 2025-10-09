@@ -4,6 +4,7 @@ import cors from 'cors';
 import { PORT } from './config.js';
 import { initializeDeviceStore } from './deviceStore.js';
 import metricsRoutes from './routes/metricsRoutes.js';
+import metricsStreamRoutes from './routes/metricsStreamRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import { startMetricsSampling } from './metricsService.js';
 import { initializeMetricsHistoryStore } from './services/metricsHistoryStore.js';
@@ -18,6 +19,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/metrics', metricsRoutes);
+app.use('/api/metrics', metricsStreamRoutes);
 app.use('/api/devices', deviceRoutes);
 
 await initializeDeviceStore();
