@@ -26,13 +26,14 @@ The server listens on port `3000` by default. Override the port or sampling beha
 
 - `PORT` – HTTP port to listen on (default: `3000`; accepts `0` for an ephemeral port, values outside `0-65535` fall back to the default)
 - `SAMPLE_INTERVAL_MS` – Interval between metric samples stored in history (default: `1000` ms)
-- `MAX_METRIC_SAMPLES` – Maximum number of samples kept in the ring buffer (default: `1000`)
+- `MAX_METRIC_SAMPLES` – Maximum number of samples stored for history responses and retained on disk (default: `1000`)
+- `METRICS_DB_PATH` – Filesystem path for the SQLite database that stores historical samples (default: `./data/metrics-history.db` within the server directory)
 - `RACK_TEMPERATURE_SENSOR_URL` – Optional override for the rack sensor API endpoint (default: `http://192.168.0.60/api`)
 
 ### API Endpoints
 
 - `GET /api/metrics/current` – Returns a fresh snapshot collected on request.
-- `GET /api/metrics/history` – Returns the in-memory history of recent samples.
+- `GET /api/metrics/history` – Returns the most recent samples persisted in the metrics history database.
 - `GET /api/devices` – Returns the list of devices loaded from `devices.json`, including current in-memory state.
 - `POST /api/devices/:id/actions` – Applies an action to the specified device. Supported actions depend on the `type` field (see below).
 
@@ -69,3 +70,11 @@ pm2 startup
 ```
 
 Alternatively, create a `systemd` service that runs `node /path/to/RaspberryPiServer2/server/index.js` at boot.
+
+## Persistent metrics history storage
+
+Historical samples are written to a local SQLite database using `better-sqlite3`. By default the database file lives at
+`./data/metrics-history.db` (relative to the `server/` directory). The folder is created automatically when the server starts.
+Set the `METRICS_DB_PATH` environment variable to move the database elsewhere—relative values are resolved from the server
+directory, while absolute values are used as-is. Regardless of location, the file should be stored on persistent storage (for
+example the Raspberry Pi's SD card) so that history survives restarts.
