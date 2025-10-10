@@ -24,6 +24,10 @@
     "id": "rack-temperature-sensor",
     "name": "Rack Temperature Sensor",
     "type": "sensor",
+    "integration": {
+      "type": "rack-sensor-http",
+      "ip": "192.168.0.60"
+    },
     "state": {
       "temperatureC": 24.2,
       "humidityPercent": 40,
