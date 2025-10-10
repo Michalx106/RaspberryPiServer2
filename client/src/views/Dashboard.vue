@@ -525,6 +525,88 @@ const destroyChartInstance = () => {
   chartInstance.value = null
 }
 
+const getChartOptions = () => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: {
+    duration: 0,
+  },
+  interaction: {
+    mode: 'index',
+    intersect: false,
+  },
+  scales: {
+    yPercent: {
+      type: 'linear',
+      beginAtZero: true,
+      suggestedMax: 100,
+      title: {
+        display: true,
+        text: 'Usage (%)',
+      },
+      ticks: {
+        callback: (value) => `${value}%`,
+      },
+      grid: {
+        color: 'rgba(148, 163, 184, 0.2)',
+      },
+    },
+    yTemperature: {
+      type: 'linear',
+      position: 'right',
+      beginAtZero: true,
+      suggestedMax: 110,
+      title: {
+        display: true,
+        text: 'Temperature (°C)',
+      },
+      ticks: {
+        callback: (value) => `${value}°C`,
+      },
+      grid: {
+        drawOnChartArea: false,
+      },
+    },
+    x: {
+      type: 'category',
+      title: {
+        display: true,
+        text: 'Time',
+      },
+      ticks: {
+        maxRotation: 0,
+        autoSkipPadding: 10,
+      },
+      grid: {
+        color: 'rgba(148, 163, 184, 0.14)',
+      },
+    },
+  },
+  plugins: {
+    legend: {
+      display: true,
+      position: 'bottom',
+      labels: {
+        usePointStyle: true,
+        padding: 20,
+      },
+    },
+    tooltip: {
+      callbacks: {
+        label: (context) => {
+          const value = context.parsed?.y
+          if (!Number.isFinite(value)) {
+            return `${context.dataset.label}: --`
+          }
+          const unitSuffix = context.dataset?.unit ?? ''
+          const formattedValue = value.toFixed(1)
+          return `${context.dataset.label}: ${formattedValue}${unitSuffix}`
+        },
+      },
+    },
+  },
+})
+
 const renderChart = () => {
   if (!chartCanvas.value) return
 
@@ -580,99 +662,27 @@ const renderChart = () => {
   }
 
   const ctx = chartCanvas.value.getContext('2d')
-  if (!ctx) return
-
-  const chartConfig = {
-    type: 'line',
-    data: {
-      labels,
-      datasets,
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: {
-        duration: 0,
-      },
-      interaction: {
-        mode: 'index',
-        intersect: false,
-      },
-      scales: {
-        yPercent: {
-          type: 'linear',
-          beginAtZero: true,
-          suggestedMax: 100,
-          title: {
-            display: true,
-            text: 'Usage (%)',
-          },
-          ticks: {
-            callback: (value) => `${value}%`,
-          },
-          grid: {
-            color: 'rgba(148, 163, 184, 0.2)',
-          },
-        },
-        yTemperature: {
-          type: 'linear',
-          position: 'right',
-          beginAtZero: true,
-          suggestedMax: 110,
-          title: {
-            display: true,
-            text: 'Temperature (°C)',
-          },
-          ticks: {
-            callback: (value) => `${value}°C`,
-          },
-          grid: {
-            drawOnChartArea: false,
-          },
-        },
-        x: {
-          type: 'category',
-          title: {
-            display: true,
-            text: 'Time',
-          },
-          ticks: {
-            maxRotation: 0,
-            autoSkipPadding: 10,
-          },
-          grid: {
-            color: 'rgba(148, 163, 184, 0.14)',
-          },
-        },
-      },
-      plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-          labels: {
-            usePointStyle: true,
-            padding: 20,
-          },
-        },
-        tooltip: {
-          callbacks: {
-            label: (context) => {
-              const value = context.parsed?.y
-              if (!Number.isFinite(value)) {
-                return `${context.dataset.label}: --`
-              }
-              const unitSuffix = context.dataset?.unit ?? ''
-              const formattedValue = value.toFixed(1)
-              return `${context.dataset.label}: ${formattedValue}${unitSuffix}`
-            },
-          },
-        },
-      },
-    },
+  if (!ctx) {
+    destroyChartInstance()
+    return
   }
 
-  destroyChartInstance()
-  chartInstance.value = new Chart(ctx, chartConfig)
+  if (!chartInstance.value) {
+    chartInstance.value = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets,
+      },
+      options: getChartOptions(),
+    })
+    return
+  }
+
+  const chart = chartInstance.value
+  chart.data.labels = labels
+  chart.data.datasets = datasets
+  chart.update('none')
 }
 
 onMounted(async () => {
