@@ -4,95 +4,12 @@ import {
   extractShellySwitchState,
   fetchShellySwitchState,
 } from '../shellyIntegration.js';
+import {
+  extractRackSensorState,
+  fetchRackSensorPayload,
+  getRackSensorIntegration,
+} from '../rackSensorIntegration.js';
 const RACK_TEMPERATURE_SENSOR_ID = 'rack-temperature-sensor';
-
-function getRackSensorIntegration(device) {
-  const integration = device.integration;
-  if (!integration || integration.type !== 'rack-sensor-http') {
-    throw new Error('Rack sensor integration is not configured for this device');
-  }
-
-  const baseUrl =
-    typeof integration.baseUrl === 'string' ? integration.baseUrl.trim() : '';
-
-  if (!baseUrl) {
-    throw new Error('Rack sensor integration requires a baseUrl');
-  }
-
-  return { baseUrl };
-}
-
-function normalizeRackSensorPayload(payload) {
-  if (!payload || typeof payload !== 'object') {
-    return null;
-  }
-
-  const statePatch = {};
-
-  if (Number.isFinite(payload.temperature_c)) {
-    statePatch.temperatureC = payload.temperature_c;
-  }
-  if (Number.isFinite(payload.humidity_pct)) {
-    statePatch.humidityPercent = payload.humidity_pct;
-  }
-  if (Number.isFinite(payload.temperature_avg_c)) {
-    statePatch.temperatureAvgC = payload.temperature_avg_c;
-  }
-  if (Number.isFinite(payload.humidity_avg_pct)) {
-    statePatch.humidityAvgPercent = payload.humidity_avg_pct;
-  }
-  if (Number.isFinite(payload.avg_window)) {
-    statePatch.avgWindow = payload.avg_window;
-  }
-  if (Number.isFinite(payload.avg_samples)) {
-    statePatch.avgSamples = payload.avg_samples;
-  }
-  if (Number.isFinite(payload.uptime_ms)) {
-    statePatch.uptimeMs = payload.uptime_ms;
-  }
-  if (typeof payload.stale === 'boolean') {
-    statePatch.stale = payload.stale;
-  }
-  if (typeof payload.sensor === 'string' && payload.sensor.trim()) {
-    statePatch.sensor = payload.sensor.trim();
-  }
-  if (typeof payload.pin === 'string' && payload.pin.trim()) {
-    statePatch.pin = payload.pin.trim();
-  }
-
-  return Object.keys(statePatch).length > 0 ? statePatch : null;
-}
-
-async function fetchRackSensorPayload({ baseUrl }) {
-  let response;
-
-  try {
-    response = await fetch(baseUrl, {
-      headers: { Accept: 'application/json' },
-    });
-  } catch (error) {
-    console.warn(
-      `Failed to connect to rack temperature sensor at ${baseUrl}:`,
-      error,
-    );
-    return null;
-  }
-
-  if (!response.ok) {
-    const responseText = await response.text().catch(() => '');
-    console.warn(
-      `Rack temperature sensor at ${baseUrl} responded with ${response.status} ${response.statusText}: ${responseText}`,
-    );
-    return null;
-  }
-
-  try {
-    return await response.json();
-  } catch (error) {
-    console.warn('Rack temperature sensor returned invalid JSON payload:', error);
-    return null;
-  }
-}
 
 export async function refreshRackTemperatureSensor() {
   const device = findDeviceById(RACK_TEMPERATURE_SENSOR_ID);
@@ -101,7 +18,6 @@ export async function refreshRackTemperatureSensor() {
   }
 
   let integration;
-
   try {
     integration = getRackSensorIntegration(device);
   } catch (error) {
@@ -111,12 +27,18 @@ export async function refreshRackTemperatureSensor() {
     return;
   }
 
-  const payload = await fetchRackSensorPayload(integration);
-  if (!payload) {
+  let payload;
+  try {
+    payload = await fetchRackSensorPayload(integration);
+  } catch (error) {
+    console.warn(
+      `Failed to refresh rack temperature sensor ${device.id} at ${integration.baseUrl}:`,
+      error,
+    );
     return;
   }
 
-  const statePatch = normalizeRackSensorPayload(payload);
+  const statePatch = extractRackSensorState(payload);
   if (!statePatch) {
     console.warn('Rack temperature sensor returned an unexpected payload:', payload);
     return;
