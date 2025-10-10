@@ -33,7 +33,15 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  shallowRef,
+  watch,
+} from 'vue'
 import axios from 'axios'
 import {
   CategoryScale,
@@ -61,7 +69,7 @@ Chart.register(
 )
 
 const chartCanvas = ref(null)
-const chartInstance = ref(null)
+const chartInstance = shallowRef(null)
 const errorMessage = ref('')
 const currentMetrics = ref({
   cpu: null,
@@ -82,13 +90,9 @@ let metricsStream = null
 let fallbackIntervalId = null
 let fallbackActive = false
 
-watch(
-  historyMetrics,
-  () => {
-    renderChart()
-  },
-  { deep: true }
-)
+watch(historyMetrics, () => {
+  renderChart()
+})
 
 const SCROLL_STORAGE_KEY = 'dashboard-scroll-position'
 let scrollSaveFrame = null
@@ -680,8 +684,31 @@ const renderChart = () => {
   }
 
   const chart = chartInstance.value
+
   chart.data.labels = labels
-  chart.data.datasets = datasets
+
+  const existingDatasets = chart.data.datasets
+  const nextLength = datasets.length
+
+  datasets.forEach((dataset, index) => {
+    if (existingDatasets[index]) {
+      Object.assign(existingDatasets[index], dataset)
+    } else {
+      existingDatasets.push({ ...dataset })
+    }
+  })
+
+  if (existingDatasets.length > nextLength) {
+    existingDatasets.splice(nextLength)
+  }
+
+  const nextOptions = getChartOptions()
+  chart.options = {
+    ...chart.options,
+    ...nextOptions,
+    scales: nextOptions.scales,
+  }
+
   chart.update('none')
 }
 
