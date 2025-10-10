@@ -38,19 +38,22 @@ async function refreshRackSensorDevice(device) {
     return;
   }
 
-  const existingState = device.state ?? {};
-  const nextState = { ...existingState, ...statePatch };
+  const liveDevice = findDeviceById(device.id);
+  const liveState = liveDevice?.state ?? {};
 
-  const hasChanges = Array.from(
-    new Set([...Object.keys(existingState), ...Object.keys(nextState)]),
-  ).some((key) => !Object.is(existingState[key], nextState[key]));
+  const hasChanges = Object.entries(statePatch).some(
+    ([key, value]) => !Object.is(liveState[key], value),
+  );
 
   if (!hasChanges) {
     return;
   }
 
   try {
-    await updateDeviceState(device.id, () => nextState);
+    await updateDeviceState(device.id, (state) => ({
+      ...state,
+      ...statePatch,
+    }));
   } catch (error) {
     console.warn('Failed to persist rack temperature sensor state:', error);
   }
