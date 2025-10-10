@@ -9,14 +9,8 @@ import {
   fetchRackSensorPayload,
   getRackSensorIntegration,
 } from '../rackSensorIntegration.js';
-const RACK_TEMPERATURE_SENSOR_ID = 'rack-temperature-sensor';
 
-export async function refreshRackTemperatureSensor() {
-  const device = findDeviceById(RACK_TEMPERATURE_SENSOR_ID);
-  if (!device) {
-    return;
-  }
-
+async function refreshRackSensorDevice(device) {
   let integration;
   try {
     integration = getRackSensorIntegration(device);
@@ -62,6 +56,15 @@ export async function refreshRackTemperatureSensor() {
   }
 }
 
+export async function refreshRackTemperatureSensors() {
+  const devices = listDevices();
+  const rackSensors = devices.filter(
+    (device) => device.integration?.type === 'rack-sensor-http',
+  );
+
+  await Promise.all(rackSensors.map((device) => refreshRackSensorDevice(device)));
+}
+
 export async function refreshShellySwitchStates() {
   const devices = listDevices();
   const shellySwitches = devices.filter(
@@ -99,7 +102,10 @@ export async function refreshShellySwitchStates() {
 }
 
 export async function refreshAllDeviceStates() {
-  await Promise.all([refreshShellySwitchStates(), refreshRackTemperatureSensor()]);
+  await Promise.all([
+    refreshShellySwitchStates(),
+    refreshRackTemperatureSensors(),
+  ]);
 }
 
 export class DeviceActionValidationError extends Error {
