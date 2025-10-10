@@ -26,7 +26,7 @@
     "type": "sensor",
     "integration": {
       "type": "rack-sensor-http",
-      "baseUrl": "http://192.168.0.60/api"
+      "ip": "192.168.0.60"
     },
     "state": {
       "temperatureC": 24.2,

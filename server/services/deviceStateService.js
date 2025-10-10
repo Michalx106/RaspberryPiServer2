@@ -32,7 +32,7 @@ export async function refreshRackTemperatureSensor() {
     payload = await fetchRackSensorPayload(integration);
   } catch (error) {
     console.warn(
-      `Failed to refresh rack temperature sensor ${device.id} at ${integration.baseUrl}:`,
+      `Failed to refresh rack temperature sensor ${device.id} at ${integration.apiUrl}:`,
       error,
     );
     return;

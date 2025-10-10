@@ -1,54 +1,60 @@
+function normalizeRackSensorIntegration(rawIp) {
+  const ip = typeof rawIp === 'string' ? rawIp.trim() : '';
+
+  if (!ip) {
+    throw new Error('Rack sensor integration requires an IP address');
+  }
+
+  const hasProtocol = /^[a-z]+:\/\//i.test(ip);
+  const base = hasProtocol ? ip : `http://${ip}`;
+  const trimmedBase = base.replace(/\/+$/, '');
+  const apiUrl = trimmedBase.endsWith('/api')
+    ? trimmedBase
+    : `${trimmedBase}/api`;
+
+  return { ip, apiUrl };
+}
+
 export function getRackSensorIntegration(device) {
   const integration = device.integration;
   if (!integration || integration.type !== 'rack-sensor-http') {
     throw new Error('Rack sensor integration is not configured for this device');
   }
 
-  const baseUrl =
-    typeof integration.baseUrl === 'string' ? integration.baseUrl.trim() : '';
-
-  if (!baseUrl) {
-    throw new Error('Rack sensor integration requires a baseUrl');
-  }
-
-  return { baseUrl };
+  return normalizeRackSensorIntegration(integration.ip);
 }
 
 export async function fetchRackSensorPayload(deviceOrIntegration) {
-  let baseUrl = '';
+  let integration;
 
   if (
     deviceOrIntegration &&
     typeof deviceOrIntegration === 'object' &&
-    'baseUrl' in deviceOrIntegration
+    'ip' in deviceOrIntegration
   ) {
-    const candidate = deviceOrIntegration.baseUrl;
-    if (typeof candidate === 'string') {
-      baseUrl = candidate.trim();
-    }
-    if (!baseUrl) {
-      throw new Error('Rack sensor integration requires a baseUrl');
-    }
+    integration = normalizeRackSensorIntegration(deviceOrIntegration.ip);
   } else {
-    ({ baseUrl } = getRackSensorIntegration(deviceOrIntegration));
+    integration = getRackSensorIntegration(deviceOrIntegration);
   }
+
+  const { ip, apiUrl } = integration;
 
   let response;
 
   try {
-    response = await fetch(baseUrl, {
+    response = await fetch(apiUrl, {
       headers: { Accept: 'application/json' },
     });
   } catch (error) {
     throw new Error(
-      `Failed to connect to rack temperature sensor at ${baseUrl}: ${error.message}`,
+      `Failed to connect to rack temperature sensor at ${apiUrl}: ${error.message}`,
     );
   }
 
   if (!response.ok) {
     const responseText = await response.text().catch(() => '');
     throw new Error(
-      `Rack temperature sensor at ${baseUrl} responded with ${response.status} ${response.statusText}: ${responseText}`,
+      `Rack temperature sensor at ${apiUrl} responded with ${response.status} ${response.statusText}: ${responseText}`,
     );
   }
 
@@ -57,13 +63,13 @@ export async function fetchRackSensorPayload(deviceOrIntegration) {
     payload = await response.json();
   } catch (error) {
     throw new Error(
-      `Rack temperature sensor at ${baseUrl} returned invalid JSON: ${error.message}`,
+      `Rack temperature sensor at ${apiUrl} returned invalid JSON: ${error.message}`,
     );
   }
 
   if (!payload || typeof payload !== 'object') {
     throw new Error(
-      `Rack temperature sensor at ${baseUrl} returned an unexpected payload`,
+      `Rack temperature sensor at ${apiUrl} returned an unexpected payload`,
     );
   }
 
