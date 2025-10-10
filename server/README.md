@@ -28,7 +28,6 @@ The server listens on port `3000` by default. Override the port or sampling beha
 - `SAMPLE_INTERVAL_MS` – Interval between metric samples stored in history (default: `1000` ms)
 - `MAX_METRIC_SAMPLES` – Maximum number of samples stored for history responses and retained on disk (default: `1000`)
 - `METRICS_DB_PATH` – Filesystem path for the SQLite database that stores historical samples (default: `./data/metrics-history.db` within the server directory)
-- `RACK_TEMPERATURE_SENSOR_URL` – Optional override for the rack sensor API endpoint (default: `http://192.168.0.60/api`)
 
 ### API Endpoints
 
@@ -50,7 +49,25 @@ The server listens on port `3000` by default. Override the port or sampling beha
 - Sample entries ship with the repository so the manual tests below can run end-to-end:
   - `shelly1plus-relay` – A Shelly Plus 1 relay exposed as a `switch`. Its state synchronises with the physical device using the `integration` block (`type: "shelly-gen3"`, `ip`, and `switchId`).
   - `bedroom-dimmer` – A virtual `dimmer` whose `state.level` defaults to `42`. Posting a new level updates both the in-memory state and `devices.json`.
-  - `rack-temperature-sensor` – A read-only `sensor` that publishes `state.temperatureC`, `state.humidityPercent`, and moving average metadata (`state.temperatureAvgC`, `state.humidityAvgPercent`, `state.avgWindow`, `state.avgSamples`, plus uptime/staleness details).
+  - `rack-temperature-sensor` – A read-only `sensor` that publishes `state.temperatureC`, `state.humidityPercent`, and moving average metadata (`state.temperatureAvgC`, `state.humidityAvgPercent`, `state.avgWindow`, `state.avgSamples`, plus uptime/staleness details). It integrates with an HTTP rack sensor using the `integration` block (`type: "rack-sensor-http"`, `baseUrl`).
+
+### Rack temperature sensor integration
+
+- Set up the rack sensor by adding an `integration` block to its entry in [`devices.json`](./devices.json):
+
+  ```json
+  {
+    "id": "rack-temperature-sensor",
+    "name": "Rack Temperature Sensor",
+    "type": "sensor",
+    "integration": {
+      "type": "rack-sensor-http",
+      "baseUrl": "http://192.168.0.60/api"
+    }
+  }
+  ```
+
+- The `baseUrl` must point to the HTTP endpoint that returns the sensor payload as JSON. If the field is missing or empty the server skips refreshing the device until the configuration is corrected.
 - **Manual test plan:**
   1. Start the server (`node index.js`) and verify that `GET /api/devices` returns the contents of `devices.json`.
   2. Send `POST /api/devices/shelly1plus-relay/actions` with `{ "action": "toggle" }` and ensure the response flips `state.on` and that `devices.json` updates accordingly (the server will also call the Shelly REST API using the metadata from the sample entry).

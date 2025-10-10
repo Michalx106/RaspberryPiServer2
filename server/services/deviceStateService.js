@@ -4,9 +4,23 @@ import {
   extractShellySwitchState,
   fetchShellySwitchState,
 } from '../shellyIntegration.js';
-import { RACK_TEMPERATURE_SENSOR_URL } from '../config.js';
-
 const RACK_TEMPERATURE_SENSOR_ID = 'rack-temperature-sensor';
+
+function getRackSensorIntegration(device) {
+  const integration = device.integration;
+  if (!integration || integration.type !== 'rack-sensor-http') {
+    throw new Error('Rack sensor integration is not configured for this device');
+  }
+
+  const baseUrl =
+    typeof integration.baseUrl === 'string' ? integration.baseUrl.trim() : '';
+
+  if (!baseUrl) {
+    throw new Error('Rack sensor integration requires a baseUrl');
+  }
+
+  return { baseUrl };
+}
 
 function normalizeRackSensorPayload(payload) {
   if (!payload || typeof payload !== 'object') {
@@ -49,16 +63,16 @@ function normalizeRackSensorPayload(payload) {
   return Object.keys(statePatch).length > 0 ? statePatch : null;
 }
 
-async function fetchRackSensorPayload() {
+async function fetchRackSensorPayload({ baseUrl }) {
   let response;
 
   try {
-    response = await fetch(RACK_TEMPERATURE_SENSOR_URL, {
+    response = await fetch(baseUrl, {
       headers: { Accept: 'application/json' },
     });
   } catch (error) {
     console.warn(
-      `Failed to connect to rack temperature sensor at ${RACK_TEMPERATURE_SENSOR_URL}:`,
+      `Failed to connect to rack temperature sensor at ${baseUrl}:`,
       error,
     );
     return null;
@@ -67,7 +81,7 @@ async function fetchRackSensorPayload() {
   if (!response.ok) {
     const responseText = await response.text().catch(() => '');
     console.warn(
-      `Rack temperature sensor at ${RACK_TEMPERATURE_SENSOR_URL} responded with ${response.status} ${response.statusText}: ${responseText}`,
+      `Rack temperature sensor at ${baseUrl} responded with ${response.status} ${response.statusText}: ${responseText}`,
     );
     return null;
   }
@@ -86,7 +100,18 @@ export async function refreshRackTemperatureSensor() {
     return;
   }
 
-  const payload = await fetchRackSensorPayload();
+  let integration;
+
+  try {
+    integration = getRackSensorIntegration(device);
+  } catch (error) {
+    console.warn(
+      `Rack temperature sensor ${device.id} is misconfigured: ${error.message}`,
+    );
+    return;
+  }
+
+  const payload = await fetchRackSensorPayload(integration);
   if (!payload) {
     return;
   }
