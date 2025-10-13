@@ -34,6 +34,7 @@ let originalAxiosGet
 let originalSVGElement
 let originalElement
 let originalNode
+let originalXMLSerializer
 let mount
 let nextTick
 
@@ -45,12 +46,14 @@ beforeEach(async () => {
   originalSVGElement = globalThis.SVGElement
   originalElement = globalThis.Element
   originalNode = globalThis.Node
+  originalXMLSerializer = globalThis.XMLSerializer
   globalThis.window = dom.window
   globalThis.document = dom.window.document
   globalThis.navigator = dom.window.navigator
   globalThis.SVGElement = dom.window.SVGElement
   globalThis.Element = dom.window.Element
   globalThis.Node = dom.window.Node
+  globalThis.XMLSerializer = dom.window.XMLSerializer
   dom.window.setInterval = (handler) => {
     if (typeof handler === 'function') {
       handler()
@@ -102,6 +105,11 @@ afterEach(() => {
   } else {
     globalThis.Node = originalNode
   }
+  if (originalXMLSerializer === undefined) {
+    delete globalThis.XMLSerializer
+  } else {
+    globalThis.XMLSerializer = originalXMLSerializer
+  }
   dom = null
 })
 
@@ -134,6 +142,41 @@ test('renders camera snapshots returned by the API', async () => {
     assert.equal(cards.length, 1)
     assert.match(cards[0].find('img').attributes('src'), /thumb\.jpg\?t=\d+$/)
     assert.equal(cards[0].text().includes('Front door'), true)
+  } finally {
+    wrapper.unmount()
+  }
+})
+
+test('renders camera data provided via integration metadata urls', async () => {
+  const CamerasView = await loadComponent('../src/views/Cameras.vue')
+  axios.get = async () => ({
+    data: {
+      cameras: [
+        {
+          id: 'cam-1',
+          name: 'Balkon',
+          urls: {
+            snapshotProxy: '/api/cameras/cam-1/snapshot',
+            streamProxy: '/api/cameras/cam-1/stream',
+            streamType: 'hls'
+          }
+        }
+      ]
+    }
+  })
+
+  const wrapper = mount(CamerasView)
+
+  try {
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    const markup = wrapper.html()
+    assert.equal(markup.includes('Snapshot unavailable'), false)
+    assert.match(markup, /<img[^>]+src="\/api\/cameras\/cam-1\/snapshot\?t=\d+"/)
+    assert.match(markup, /<source[^>]+src="\/api\/cameras\/cam-1\/stream"/)
+    assert.match(markup, /<source[^>]+type="application\/x-mpegURL"/)
   } finally {
     wrapper.unmount()
   }

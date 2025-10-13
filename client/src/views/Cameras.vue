@@ -126,6 +126,53 @@ const handleError = (error) => {
   errorMessage.value = error?.message ?? defaultMessage
 }
 
+const pickFirstString = (...values) =>
+  values.find((value) => typeof value === 'string' && value.trim().length > 0)
+
+const normaliseCameraEntry = (camera) => {
+  if (!camera || typeof camera !== 'object') {
+    return null
+  }
+
+  const urls =
+    camera.urls && typeof camera.urls === 'object' ? camera.urls : undefined
+
+  const snapshotUrl = pickFirstString(
+    camera.thumbnailUrl,
+    camera.snapshotUrl,
+    urls?.snapshotProxy,
+    urls?.snapshot
+  )
+
+  const streamUrl = pickFirstString(
+    camera.streamUrl,
+    urls?.streamProxy,
+    urls?.stream,
+    urls?.streamNoAuth
+  )
+
+  const streamMimeType = pickFirstString(
+    camera.streamMimeType,
+    urls?.streamMimeType
+  )
+
+  const streamType = pickFirstString(
+    camera.streamType,
+    camera.streamFormat,
+    urls?.streamType,
+    urls?.streamFormat
+  )
+
+  return {
+    ...camera,
+    thumbnailUrl: snapshotUrl ?? '',
+    streamUrl: streamUrl ?? '',
+    streamMimeType: streamMimeType ?? undefined,
+    streamType: streamType ?? undefined,
+    urls,
+  }
+}
+
 const refreshCameras = async () => {
   if (isFetching.value) {
     return
@@ -142,6 +189,8 @@ const refreshCameras = async () => {
         ? data.cameras
         : []
     cameras.value = payload
+      .map((camera) => normaliseCameraEntry(camera))
+      .filter((camera) => camera !== null)
     thumbnailRefreshKey.value = Date.now()
   } catch (error) {
     handleError(error)
@@ -161,7 +210,12 @@ const buildThumbnailSrc = (thumbnailUrl) => {
 }
 
 const normaliseStreamType = (camera) => {
-  const type = camera?.streamType ?? camera?.streamFormat ?? ''
+  const type =
+    camera?.streamType ??
+    camera?.streamFormat ??
+    camera?.urls?.streamType ??
+    camera?.urls?.streamFormat ??
+    ''
   return typeof type === 'string' ? type.toLowerCase() : ''
 }
 
@@ -171,8 +225,9 @@ const shouldRenderStreamInIframe = (camera) => {
 }
 
 const streamMimeType = (camera) => {
-  if (camera?.streamMimeType) {
-    return camera.streamMimeType
+  const mimeType = camera?.streamMimeType ?? camera?.urls?.streamMimeType
+  if (mimeType) {
+    return mimeType
   }
 
   const type = normaliseStreamType(camera)
