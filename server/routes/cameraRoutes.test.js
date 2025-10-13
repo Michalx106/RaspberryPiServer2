@@ -58,6 +58,9 @@ test('GET /api/cameras returns camera metadata', async (t) => {
       assert.equal(camera.integration.type, 'camspot-45');
       assert.equal(camera.integration.username, 'admin');
       assert.ok(!('password' in camera.integration));
+      assert.equal(camera.thumbnailUrl, '/api/cameras/cam-1/snapshot');
+      assert.equal(camera.streamUrl, '/api/cameras/cam-1/stream');
+      assert.equal(camera.streamType, 'rtsp');
       assert.equal(camera.urls.snapshot, 'http://192.168.50.20/tmpfs/auto.jpg');
       assert.equal(camera.urls.stream, 'rtsp://admin:123456@192.168.50.20/live/ch0');
       assert.equal(camera.urls.snapshotProxy, '/api/cameras/cam-1/snapshot');

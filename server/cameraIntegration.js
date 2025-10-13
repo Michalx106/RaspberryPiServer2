@@ -127,6 +127,14 @@ export function getCamspot45Metadata(device) {
   const urls = buildCamspot45Urls(integration);
   const urlsWithCredentials = buildCamspot45Urls(integration, { includeCredentials: true });
 
+  const snapshotProxyUrl = `/api/cameras/${device.id}/snapshot`;
+  const streamProxyUrl = `/api/cameras/${device.id}/stream`;
+  const proxiedStreamUrl = streamProxyUrl;
+  const hasRtspStream = urls.streamUrl.startsWith('rtsp://');
+  const preferredStreamUrl = hasRtspStream
+    ? proxiedStreamUrl
+    : proxiedStreamUrl || urls.streamUrl;
+
   return {
     id: device.id,
     name: device.name,
@@ -140,12 +148,15 @@ export function getCamspot45Metadata(device) {
       streamPath: integration.streamPath,
       username: integration.username,
     },
+    thumbnailUrl: snapshotProxyUrl,
+    streamUrl: preferredStreamUrl,
+    streamType: hasRtspStream ? 'rtsp' : undefined,
     urls: {
       snapshot: urls.snapshotUrl,
-      snapshotProxy: `/api/cameras/${device.id}/snapshot`,
+      snapshotProxy: snapshotProxyUrl,
       stream: urlsWithCredentials.streamUrl,
       streamNoAuth: urls.streamUrl,
-      streamProxy: `/api/cameras/${device.id}/stream`,
+      streamProxy: streamProxyUrl,
     },
   };
 }
