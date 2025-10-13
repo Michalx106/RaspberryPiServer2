@@ -30,8 +30,8 @@ test('GET /api/cameras returns camera metadata', async (t) => {
         integration: {
           type: 'camspot-45',
           ip: '192.168.50.20',
-          username: 'viewer',
-          password: 'secret',
+          username: 'admin',
+          password: '123456',
         },
       },
       {
@@ -56,10 +56,10 @@ test('GET /api/cameras returns camera metadata', async (t) => {
       const camera = body.cameras[0];
       assert.equal(camera.id, 'cam-1');
       assert.equal(camera.integration.type, 'camspot-45');
-      assert.equal(camera.integration.username, 'viewer');
+      assert.equal(camera.integration.username, 'admin');
       assert.ok(!('password' in camera.integration));
       assert.equal(camera.urls.snapshot, 'http://192.168.50.20/tmpfs/auto.jpg');
-      assert.equal(camera.urls.stream, 'rtsp://viewer:secret@192.168.50.20/live/ch0');
+      assert.equal(camera.urls.stream, 'rtsp://admin:123456@192.168.50.20/live/ch0');
       assert.equal(camera.urls.snapshotProxy, '/api/cameras/cam-1/snapshot');
     },
   );
@@ -77,8 +77,8 @@ test('GET /api/cameras/:id/snapshot returns 502 when camera is unreachable', asy
         integration: {
           type: 'camspot-45',
           ip: '192.168.50.20',
-          username: 'viewer',
-          password: 'secret',
+          username: 'admin',
+          password: '123456',
         },
       },
     ],

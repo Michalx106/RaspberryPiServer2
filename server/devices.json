@@ -48,8 +48,8 @@
     "integration": {
       "type": "camspot-45",
       "ip": "192.168.0.171",
-      "username": "viewer",
-      "password": "change-me",
+      "username": "admin",
+      "password": "123456",
       "httpPort": 80,
       "rtspPort": 554,
       "snapshotPath": "/tmpfs/auto.jpg",

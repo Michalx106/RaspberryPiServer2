@@ -97,8 +97,8 @@ The server listens on port `3000` by default. Override the port or sampling beha
     "integration": {
       "type": "camspot-45",
       "ip": "192.168.0.171",
-      "username": "viewer",
-      "password": "change-me",
+      "username": "admin",
+      "password": "123456",
       "snapshotPath": "/tmpfs/auto.jpg",
       "streamPath": "/live/ch0"
     }
