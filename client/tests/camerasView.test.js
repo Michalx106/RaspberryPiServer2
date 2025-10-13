@@ -181,3 +181,38 @@ test('renders camera data provided via integration metadata urls', async () => {
     wrapper.unmount()
   }
 })
+
+test('shows an RTSP helper message instead of embedding an unsupported stream', async () => {
+  const CamerasView = await loadComponent('../src/views/Cameras.vue')
+  axios.get = async () => ({
+    data: {
+      cameras: [
+        {
+          id: 'cam-rtsp',
+          name: 'Back garden',
+          streamUrl: 'rtsp://admin:123456@192.168.0.171/live/ch0'
+        }
+      ]
+    }
+  })
+
+  const wrapper = mount(CamerasView)
+
+  try {
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    const markup = wrapper.html()
+    assert.equal(markup.includes('camera-stream__player'), false)
+    assert.equal(markup.includes('camera-stream__frame'), false)
+    assert.match(
+      markup,
+      /RTSP stream that cannot be played directly in the\s+browser/,
+      'fallback copy should mention RTSP limitation'
+    )
+    assert.match(markup, /<a[^>]+href="rtsp:\/\/admin:123456@192\.168\.0\.171\/live\/ch0"/)
+  } finally {
+    wrapper.unmount()
+  }
+})

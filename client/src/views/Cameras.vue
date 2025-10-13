@@ -57,9 +57,12 @@
           <span class="camera-thumbnail__placeholder">Snapshot unavailable</span>
         </div>
 
-        <div v-if="camera.streamUrl" class="camera-stream">
+        <div
+          v-if="camera.streamUrl || camera.directStreamUrl"
+          class="camera-stream"
+        >
           <video
-            v-if="!shouldRenderStreamInIframe(camera)"
+            v-if="camera.streamUrl && !shouldRenderStreamInIframe(camera) && !isRtspStream(camera)"
             class="camera-stream__player"
             controls
             playsinline
@@ -76,13 +79,25 @@
             </p>
           </video>
           <iframe
-            v-else
+            v-else-if="camera.streamUrl && !isRtspStream(camera)"
             class="camera-stream__frame"
             :src="camera.streamUrl"
             :title="`Embedded stream for ${camera.name ?? 'camera'}`"
             loading="lazy"
             allow="autoplay; encrypted-media"
           ></iframe>
+          <p v-else class="camera-stream__external" role="note">
+            This camera exposes an RTSP stream that cannot be played directly in the
+            browser. Use a compatible player and open
+            <a
+              v-if="camera.directStreamUrl"
+              :href="camera.directStreamUrl"
+              rel="noreferrer"
+            >
+              the RTSP address
+            </a>
+            to watch the feed.
+          </p>
         </div>
       </article>
     </section>
@@ -129,6 +144,17 @@ const handleError = (error) => {
 const pickFirstString = (...values) =>
   values.find((value) => typeof value === 'string' && value.trim().length > 0)
 
+const isHttpLikeUrl = (value) =>
+  typeof value === 'string' && /^https?:\/\//i.test(value.trim())
+
+const normaliseDirectStreamUrl = (camera) =>
+  pickFirstString(
+    camera?.urls?.stream,
+    camera?.urls?.streamNoAuth,
+    camera?.streamUrl,
+    camera?.stream,
+  )
+
 const normaliseCameraEntry = (camera) => {
   if (!camera || typeof camera !== 'object') {
     return null
@@ -144,11 +170,14 @@ const normaliseCameraEntry = (camera) => {
     urls?.snapshot
   )
 
+  const directStreamUrl = normaliseDirectStreamUrl(camera)
+
   const streamUrl = pickFirstString(
-    camera.streamUrl,
     urls?.streamProxy,
-    urls?.stream,
-    urls?.streamNoAuth
+    isHttpLikeUrl(camera.streamUrl) ? camera.streamUrl : undefined,
+    isHttpLikeUrl(urls?.stream) ? urls?.stream : undefined,
+    isHttpLikeUrl(urls?.streamNoAuth) ? urls?.streamNoAuth : undefined,
+    isHttpLikeUrl(directStreamUrl) ? directStreamUrl : undefined
   )
 
   const streamMimeType = pickFirstString(
@@ -167,6 +196,7 @@ const normaliseCameraEntry = (camera) => {
     ...camera,
     thumbnailUrl: snapshotUrl ?? '',
     streamUrl: streamUrl ?? '',
+    directStreamUrl: directStreamUrl ?? '',
     streamMimeType: streamMimeType ?? undefined,
     streamType: streamType ?? undefined,
     urls,
@@ -217,6 +247,11 @@ const normaliseStreamType = (camera) => {
     camera?.urls?.streamFormat ??
     ''
   return typeof type === 'string' ? type.toLowerCase() : ''
+}
+
+const isRtspStream = (camera) => {
+  const url = camera?.directStreamUrl ?? camera?.streamUrl ?? ''
+  return typeof url === 'string' && url.trim().toLowerCase().startsWith('rtsp://')
 }
 
 const shouldRenderStreamInIframe = (camera) => {
@@ -301,7 +336,8 @@ onUnmounted(() => {
 defineExpose({
   buildThumbnailSrc,
   shouldRenderStreamInIframe,
-  streamMimeType
+  streamMimeType,
+  isRtspStream
 })
 </script>
 
@@ -457,6 +493,16 @@ defineExpose({
 .camera-stream__fallback a {
   color: #bfdbfe;
   text-decoration: underline;
+}
+
+.camera-stream__external {
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.camera-stream__external a {
+  color: #2563eb;
+  font-weight: 600;
 }
 
 .empty-state {
