@@ -33,11 +33,24 @@ function notFound(res) {
   res.status(404).json({ error: 'Camera not found' });
 }
 
-async function proxyCameraRequest(res, targetUrl, authorizationHeader) {
+async function proxyCameraRequest(res, targetUrl, authorizationHeader, options = {}) {
+  const { fallbackUrl } = options;
+
+  async function performFetch(url) {
+    const headers = {};
+    if (authorizationHeader) {
+      headers.Authorization = authorizationHeader;
+    }
+
+    return fetch(url, { headers });
+  }
+
   try {
-    const response = await fetch(targetUrl, {
-      headers: { Authorization: authorizationHeader },
-    });
+    let response = await performFetch(targetUrl);
+
+    if (response.status === 401 && fallbackUrl && fallbackUrl !== targetUrl) {
+      response = await performFetch(fallbackUrl);
+    }
 
     res.set('Cache-Control', 'no-store');
 
@@ -85,12 +98,17 @@ router.get('/:id/snapshot', async (req, res) => {
   }
 
   const { snapshotUrl } = buildCamspot45Urls(integration);
+  const { snapshotUrl: snapshotUrlWithCredentials } = buildCamspot45Urls(integration, {
+    includeSnapshotCredentials: true,
+  });
   const authorizationHeader = buildBasicAuthHeader(
     integration.username,
     integration.password,
   );
 
-  await proxyCameraRequest(res, snapshotUrl, authorizationHeader);
+  await proxyCameraRequest(res, snapshotUrl, authorizationHeader, {
+    fallbackUrl: snapshotUrlWithCredentials,
+  });
 });
 
 router.get('/:id/stream', async (req, res) => {

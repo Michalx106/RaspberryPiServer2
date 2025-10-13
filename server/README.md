@@ -106,7 +106,7 @@ The server listens on port `3000` by default. Override the port or sampling beha
   ```
 
 - The server exposes dedicated routes for cameras:
-  - `GET /api/cameras` – Lists every configured Camspot camera with ready-to-use snapshot/stream URLs and the corresponding proxy endpoints.
+  - `GET /api/cameras` – Lists every configured Camspot camera with ready-to-use snapshot/stream URLs and the corresponding proxy endpoints. For RTSP integrations the top-level `streamUrl` contains the credentialled RTSP address so players can connect directly, while `urls.streamProxy` exposes the HTTP proxy when the stream path is compatible.
   - `GET /api/cameras/:id/snapshot` – Proxies the JPEG snapshot through the server, applying Basic Auth headers and `Cache-Control: no-store` so browser caches stay in sync with the live image.
   - `GET /api/cameras/:id/stream` – Returns a `501` response for RTSP streams (use the RTSP URL included in the metadata). If you supply an HTTP stream path the route proxies it just like the snapshot endpoint.
 

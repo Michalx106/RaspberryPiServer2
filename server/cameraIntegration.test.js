@@ -30,6 +30,7 @@ test('camspot integration defaults match Camspot 4.5 documentation', () => {
   assert.equal(urls.snapshotUrl, 'http://192.168.0.150/tmpfs/auto.jpg');
 
   const urlsWithCredentials = buildCamspot45Urls(integration, { includeCredentials: true });
+  assert.equal(urlsWithCredentials.snapshotUrl, 'http://admin:123456@192.168.0.150/tmpfs/auto.jpg');
   assert.equal(urlsWithCredentials.streamUrl, 'rtsp://admin:123456@192.168.0.150/live/ch0');
   assert.equal(urls.streamUrl, 'rtsp://192.168.0.150/live/ch0');
 });
@@ -49,9 +50,16 @@ test('camspot metadata exposes backward compatible snapshot and stream fields', 
 
   const metadata = getCamspot45Metadata(device);
   assert.equal(metadata.thumbnailUrl, '/api/cameras/cam-1/snapshot');
-  assert.equal(metadata.streamUrl, '/api/cameras/cam-1/stream');
+  assert.equal(
+    metadata.streamUrl,
+    'rtsp://admin:123456@192.168.0.150/live/ch0',
+  );
   assert.equal(metadata.streamType, 'rtsp');
   assert.equal(metadata.urls.snapshotProxy, '/api/cameras/cam-1/snapshot');
+  assert.equal(
+    metadata.urls.snapshotWithCredentials,
+    'http://admin:123456@192.168.0.150/tmpfs/auto.jpg',
+  );
   assert.equal(metadata.urls.streamProxy, '/api/cameras/cam-1/stream');
   assert.equal(metadata.urls.stream, 'rtsp://admin:123456@192.168.0.150/live/ch0');
   assert.equal(metadata.urls.streamNoAuth, 'rtsp://192.168.0.150/live/ch0');
@@ -80,7 +88,7 @@ test('camspot integration accepts overrides for ports and paths', () => {
   assert.equal(integration.rtspPort, 8554);
 
   const urls = buildCamspot45Urls(integration, { includeCredentials: true });
-  assert.equal(urls.snapshotUrl, 'http://10.0.0.2:8080/custom/snap.jpg');
+  assert.equal(urls.snapshotUrl, 'http://admin:123456@10.0.0.2:8080/custom/snap.jpg');
   assert.equal(urls.streamUrl, 'rtsp://admin:123456@10.0.0.2:8554/rtsp/custom');
 });
 

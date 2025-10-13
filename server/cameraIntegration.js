@@ -45,16 +45,43 @@ function normalizePath(path, defaultPath) {
   return effective;
 }
 
-function buildHttpUrl({ ip, httpPort, snapshotPath }) {
-  if (snapshotPath.startsWith('http://') || snapshotPath.startsWith('https://')) {
-    return snapshotPath;
+function applyCredentialsToUrl(urlString, username, password) {
+  try {
+    const url = new URL(urlString);
+    if (!url.username && username) {
+      url.username = username;
+    }
+    if (!url.password && password) {
+      url.password = password;
+    }
+    return url.toString();
+  } catch (error) {
+    return urlString;
+  }
+}
+
+function buildHttpUrl({ ip, httpPort, snapshotPath, username, password }, includeCredentials) {
+  const isAbsolute = snapshotPath.startsWith('http://') || snapshotPath.startsWith('https://');
+
+  if (isAbsolute) {
+    return includeCredentials
+      ? applyCredentialsToUrl(snapshotPath, username, password)
+      : snapshotPath;
   }
 
   const portSegment = httpPort && httpPort !== 80 ? `:${httpPort}` : '';
-  return `http://${ip}${portSegment}${snapshotPath}`;
+  const base = `http://${ip}${portSegment}${snapshotPath}`;
+  if (!includeCredentials) {
+    return base;
+  }
+
+  return applyCredentialsToUrl(base, username, password);
 }
 
-function buildRtspUrl({ ip, username, password, rtspPort, streamPath }, includeCredentials) {
+function buildRtspUrl(
+  { ip, username, password, rtspPort, streamPath },
+  includeCredentials,
+) {
   if (streamPath.startsWith('rtsp://')) {
     return streamPath;
   }
@@ -111,13 +138,19 @@ export function getCamspot45Integration(device) {
   };
 }
 
-export function buildCamspot45Urls(integration, { includeCredentials = false } = {}) {
+export function buildCamspot45Urls(
+  integration,
+  { includeCredentials = false, includeSnapshotCredentials, includeStreamCredentials } = {},
+) {
   if (!integration || integration.type !== 'camspot-45') {
     throw new CameraIntegrationError('Camspot 4.5 integration details are required');
   }
 
-  const snapshotUrl = buildHttpUrl(integration);
-  const streamUrl = buildRtspUrl(integration, includeCredentials);
+  const snapshotWithCreds = includeSnapshotCredentials ?? includeCredentials;
+  const streamWithCreds = includeStreamCredentials ?? includeCredentials;
+
+  const snapshotUrl = buildHttpUrl(integration, snapshotWithCreds);
+  const streamUrl = buildRtspUrl(integration, streamWithCreds);
 
   return { snapshotUrl, streamUrl };
 }
@@ -125,15 +158,17 @@ export function buildCamspot45Urls(integration, { includeCredentials = false } =
 export function getCamspot45Metadata(device) {
   const integration = getCamspot45Integration(device);
   const urls = buildCamspot45Urls(integration);
-  const urlsWithCredentials = buildCamspot45Urls(integration, { includeCredentials: true });
+  const urlsWithCredentials = buildCamspot45Urls(integration, {
+    includeSnapshotCredentials: true,
+    includeStreamCredentials: true,
+  });
 
   const snapshotProxyUrl = `/api/cameras/${device.id}/snapshot`;
   const streamProxyUrl = `/api/cameras/${device.id}/stream`;
-  const proxiedStreamUrl = streamProxyUrl;
   const hasRtspStream = urls.streamUrl.startsWith('rtsp://');
   const preferredStreamUrl = hasRtspStream
-    ? proxiedStreamUrl
-    : proxiedStreamUrl || urls.streamUrl;
+    ? urlsWithCredentials.streamUrl
+    : streamProxyUrl;
 
   return {
     id: device.id,
@@ -153,6 +188,7 @@ export function getCamspot45Metadata(device) {
     streamType: hasRtspStream ? 'rtsp' : undefined,
     urls: {
       snapshot: urls.snapshotUrl,
+      snapshotWithCredentials: urlsWithCredentials.snapshotUrl,
       snapshotProxy: snapshotProxyUrl,
       stream: urlsWithCredentials.streamUrl,
       streamNoAuth: urls.streamUrl,
