@@ -40,5 +40,20 @@
       "sensor": "DHT11",
       "pin": "D1(GPIO5)"
     }
+  },
+  {
+    "id": "balkon-camera",
+    "name": "Balkon",
+    "type": "camera",
+    "integration": {
+      "type": "camspot-45",
+      "ip": "192.168.0.171",
+      "username": "viewer",
+      "password": "change-me",
+      "httpPort": 80,
+      "rtspPort": 554,
+      "snapshotPath": "/tmpfs/auto.jpg",
+      "streamPath": "/live/ch0"
+    }
   }
 ]
