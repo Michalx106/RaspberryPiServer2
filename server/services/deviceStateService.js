@@ -10,6 +10,8 @@ import {
   getRackSensorIntegration,
 } from '../rackSensorIntegration.js';
 
+class NoRackSensorStateChangeError extends Error {}
+
 async function refreshRackSensorDevice(device) {
   let integration;
   try {
@@ -41,20 +43,36 @@ async function refreshRackSensorDevice(device) {
   const liveDevice = findDeviceById(device.id);
   const liveState = liveDevice?.state ?? {};
 
-  const hasChanges = Object.entries(statePatch).some(
+  const changedEntries = Object.entries(statePatch).filter(
     ([key, value]) => !Object.is(liveState[key], value),
   );
 
-  if (!hasChanges) {
+  if (changedEntries.length === 0) {
     return;
   }
 
+  const changedPatch = Object.fromEntries(changedEntries);
+
   try {
-    await updateDeviceState(device.id, (state) => ({
-      ...state,
-      ...statePatch,
-    }));
+    await updateDeviceState(device.id, (state) => {
+      const currentState = state ?? {};
+      const remainingEntries = Object.entries(changedPatch).filter(
+        ([key, value]) => !Object.is(currentState[key], value),
+      );
+
+      if (remainingEntries.length === 0) {
+        throw new NoRackSensorStateChangeError();
+      }
+
+      return {
+        ...currentState,
+        ...Object.fromEntries(remainingEntries),
+      };
+    });
   } catch (error) {
+    if (error instanceof NoRackSensorStateChangeError) {
+      return;
+    }
     console.warn('Failed to persist rack temperature sensor state:', error);
   }
 }

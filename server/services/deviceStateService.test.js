@@ -9,6 +9,54 @@ import {
   updateDeviceState,
 } from '../deviceStore.js';
 
+test('rack sensor refresh retains additional store state fields', async (t) => {
+  const deviceId = 'rack-sensor-extra';
+  const originalDevices = await readFile(DEVICES_FILE_PATH, 'utf-8');
+
+  const testDevices = [
+    {
+      id: deviceId,
+      name: 'Rack Sensor Extra',
+      type: 'sensor',
+      integration: { type: 'rack-sensor-http', ip: '192.168.1.3' },
+      state: { temperatureC: 19, extraField: 'keep-me' },
+    },
+  ];
+
+  await writeFile(
+    DEVICES_FILE_PATH,
+    `${JSON.stringify(testDevices, null, 2)}\n`,
+    'utf-8',
+  );
+  await initializeDeviceStore();
+
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    json: async () => ({ temperature_c: 23 }),
+    text: async () => '',
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await writeFile(DEVICES_FILE_PATH, originalDevices, 'utf-8');
+    await initializeDeviceStore();
+  });
+
+  const { refreshRackTemperatureSensors } = await import('./deviceStateService.js');
+
+  await refreshRackTemperatureSensors();
+
+  const liveDevice = findDeviceById(deviceId);
+
+  assert.deepEqual(liveDevice.state, {
+    temperatureC: 23,
+    extraField: 'keep-me',
+  });
+});
+
 test('rack sensor refresh preserves existing state fields from store', async (t) => {
   const deviceId = 'rack-sensor-1';
   const originalDevices = await readFile(DEVICES_FILE_PATH, 'utf-8');
