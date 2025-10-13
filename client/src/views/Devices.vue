@@ -77,7 +77,14 @@
       </article>
     </section>
 
-    <p v-else-if="!isRefreshing" class="empty-state">No devices configured yet.</p>
+    <p
+      v-else-if="!isRefreshing"
+      class="empty-state"
+      role="status"
+      aria-live="polite"
+    >
+      No switches, dimmers, or sensors configured yet. Camera devices have moved to the dedicated Cameras tab.
+    </p>
   </div>
 </template>
 
@@ -118,6 +125,8 @@ const handleError = (error) => {
   errorMessage.value = error.message ?? defaultMessage
 }
 
+const shouldDisplayDevice = (device) => device?.type !== 'camera'
+
 const refreshDevices = async () => {
   if (isRefreshing.value) {
     return
@@ -127,7 +136,8 @@ const refreshDevices = async () => {
 
   try {
     const { data } = await axios.get('/api/devices')
-    devices.value = Array.isArray(data) ? data : []
+    const list = Array.isArray(data) ? data : []
+    devices.value = list.filter(shouldDisplayDevice)
   } catch (error) {
     handleError(error)
   } finally {
@@ -136,6 +146,11 @@ const refreshDevices = async () => {
 }
 
 const updateDeviceInList = (nextDevice) => {
+  if (!shouldDisplayDevice(nextDevice)) {
+    devices.value = devices.value.filter((device) => device.id !== nextDevice?.id)
+    return
+  }
+
   const index = devices.value.findIndex((device) => device.id === nextDevice.id)
   if (index === -1) {
     devices.value.push(nextDevice)
