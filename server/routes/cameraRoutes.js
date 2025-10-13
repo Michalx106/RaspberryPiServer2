@@ -34,22 +34,52 @@ function notFound(res) {
 }
 
 async function proxyCameraRequest(res, targetUrl, authorizationHeader, options = {}) {
-  const { fallbackUrl } = options;
+  const { fallbackUrl, fallbackAuthorizationHeader } = options;
 
-  async function performFetch(url) {
+  async function performFetch(url, header) {
     const headers = {};
-    if (authorizationHeader) {
-      headers.Authorization = authorizationHeader;
+    if (header) {
+      headers.Authorization = header;
     }
 
     return fetch(url, { headers });
   }
 
+  async function tryWithFallback(reason) {
+    if (fallbackUrl && fallbackUrl !== targetUrl) {
+      try {
+        const fallbackResponse = await performFetch(
+          fallbackUrl,
+          fallbackAuthorizationHeader,
+        );
+        return { response: fallbackResponse };
+      } catch (fallbackError) {
+        return { error: fallbackError };
+      }
+    }
+
+    return { error: reason };
+  }
+
   try {
-    let response = await performFetch(targetUrl);
+    let response;
+
+    try {
+      response = await performFetch(targetUrl, authorizationHeader);
+    } catch (error) {
+      const fallbackResult = await tryWithFallback(error);
+      if (fallbackResult.error) {
+        throw fallbackResult.error;
+      }
+      response = fallbackResult.response;
+    }
 
     if (response.status === 401 && fallbackUrl && fallbackUrl !== targetUrl) {
-      response = await performFetch(fallbackUrl);
+      try {
+        response = await performFetch(fallbackUrl, fallbackAuthorizationHeader);
+      } catch (error) {
+        throw error;
+      }
     }
 
     res.set('Cache-Control', 'no-store');
@@ -108,6 +138,7 @@ router.get('/:id/snapshot', async (req, res) => {
 
   await proxyCameraRequest(res, snapshotUrl, authorizationHeader, {
     fallbackUrl: snapshotUrlWithCredentials,
+    fallbackAuthorizationHeader: undefined,
   });
 });
 

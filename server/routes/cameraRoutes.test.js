@@ -157,6 +157,10 @@ test('GET /api/cameras/:id/snapshot retries with embedded credentials after 401'
           }
 
           assert.ok(input.includes('admin:123456@'));
+          const authHeader = init.headers?.get
+            ? init.headers.get('Authorization')
+            : init.headers?.Authorization;
+          assert.equal(authHeader, undefined);
           const body = new Uint8Array([0xff, 0xd8, 0xff]);
           return new Response(body, {
             status: 200,
@@ -184,6 +188,74 @@ test('GET /api/cameras/:id/snapshot retries with embedded credentials after 401'
       assert.equal(response.headers.get('cache-control'), 'no-store');
       assert.equal(response.headers.get('content-type'), 'image/jpeg');
       assert.equal(response.headers.get('content-length'), '3');
+      const buffer = new Uint8Array(await response.arrayBuffer());
+      assert.deepEqual(Array.from(buffer), [0xff, 0xd8, 0xff]);
+      assert.equal(callCount, 2);
+    },
+  );
+
+  global.fetch = originalFetch;
+});
+
+test('GET /api/cameras/:id/snapshot retries with embedded credentials when fetch throws', async (t) => {
+  const originalFetch = global.fetch;
+
+  await withCameraDevices(
+    [
+      {
+        id: 'cam-1',
+        name: 'Test Camera',
+        type: 'camera',
+        integration: {
+          type: 'camspot-45',
+          ip: '192.168.50.20',
+          username: 'admin',
+          password: '123456',
+        },
+      },
+    ],
+    async () => {
+      const app = express();
+      app.use('/api/cameras', cameraRoutes);
+      const server = app.listen(0);
+
+      let callCount = 0;
+      global.fetch = async (input, init = {}) => {
+        if (typeof input === 'string' && input.includes('192.168.50.20')) {
+          callCount += 1;
+          if (callCount === 1) {
+            assert.equal(init.headers.Authorization, 'Basic YWRtaW46MTIzNDU2');
+            throw new Error('connect ECONNREFUSED');
+          }
+
+          assert.ok(input.includes('admin:123456@'));
+          const authHeader = init.headers?.get
+            ? init.headers.get('Authorization')
+            : init.headers?.Authorization;
+          assert.equal(authHeader, undefined);
+          const body = new Uint8Array([0xff, 0xd8, 0xff]);
+          return new Response(body, {
+            status: 200,
+            headers: {
+              'content-type': 'image/jpeg',
+            },
+          });
+        }
+
+        return originalFetch(input, init);
+      };
+
+      t.after(() => {
+        server.close();
+        global.fetch = originalFetch;
+      });
+
+      const { port } = server.address();
+      const response = await originalFetch(
+        `http://127.0.0.1:${port}/api/cameras/cam-1/snapshot`,
+      );
+
+      assert.equal(response.status, 200);
       const buffer = new Uint8Array(await response.arrayBuffer());
       assert.deepEqual(Array.from(buffer), [0xff, 0xd8, 0xff]);
       assert.equal(callCount, 2);
