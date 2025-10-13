@@ -5,11 +5,62 @@ import { DEVICES_FILE_PATH } from './config.js';
 let devices = [];
 const devicesById = new Map();
 
+function cloneState(state) {
+  if (Array.isArray(state)) {
+    return state.map((item) => cloneState(item));
+  }
+
+  if (!state || typeof state !== 'object') {
+    return state;
+  }
+
+  return Object.fromEntries(
+    Object.entries(state).map(([key, value]) => [key, cloneState(value)]),
+  );
+}
+
 function cloneDevice(device) {
   return {
     ...device,
-    state: device.state ? { ...device.state } : device.state,
+    state: cloneState(device.state),
   };
+}
+
+function statesAreEqual(previousState, nextState) {
+  if (Object.is(previousState, nextState)) {
+    return true;
+  }
+
+  if (Array.isArray(previousState) && Array.isArray(nextState)) {
+    if (previousState.length !== nextState.length) {
+      return false;
+    }
+
+    return previousState.every((value, index) =>
+      statesAreEqual(value, nextState[index]),
+    );
+  }
+
+  if (
+    !previousState ||
+    typeof previousState !== 'object' ||
+    !nextState ||
+    typeof nextState !== 'object'
+  ) {
+    return false;
+  }
+
+  const previousKeys = Object.keys(previousState);
+  const nextKeys = Object.keys(nextState);
+
+  if (previousKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  return previousKeys.every((key) =>
+    Object.prototype.hasOwnProperty.call(nextState, key) &&
+    statesAreEqual(previousState[key], nextState[key]),
+  );
 }
 
 function syncDeviceCache(freshDevices) {
@@ -60,11 +111,22 @@ export async function updateDeviceState(deviceId, mutator) {
   }
 
   const existingDevice = devices[index];
-  const nextState = mutator({ ...(existingDevice.state ?? {}) });
+  const previousStateSnapshot = cloneState(existingDevice.state);
+  const draftState =
+    existingDevice.state && typeof existingDevice.state === 'object'
+      ? cloneState(existingDevice.state)
+      : {};
+  const nextState = mutator(draftState);
+  const effectiveNextState =
+    nextState && typeof nextState === 'object' ? cloneState(nextState) : nextState;
+
+  if (statesAreEqual(previousStateSnapshot, effectiveNextState)) {
+    return cloneDevice(existingDevice);
+  }
 
   const updatedDevice = {
     ...existingDevice,
-    state: nextState,
+    state: effectiveNextState,
   };
 
   devices.splice(index, 1, updatedDevice);
