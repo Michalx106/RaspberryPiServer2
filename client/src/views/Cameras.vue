@@ -136,7 +136,12 @@ const refreshCameras = async () => {
 
   try {
     const { data } = await axios.get('/api/cameras')
-    cameras.value = Array.isArray(data) ? data : []
+    const payload = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.cameras)
+        ? data.cameras
+        : []
+    cameras.value = payload
     thumbnailRefreshKey.value = Date.now()
   } catch (error) {
     handleError(error)

@@ -110,15 +110,17 @@ test('renders camera snapshots returned by the API', async () => {
   assert.ok(globalThis.document, 'document should be available for Vue rendering tests')
   assert.ok(globalThis.window?.document, 'window.document should be available')
   axios.get = async () => ({
-    data: [
-      {
-        id: 'front-door',
-        name: 'Front door',
-        thumbnailUrl: 'https://example.local/door/thumb.jpg',
-        streamUrl: 'https://example.local/door/live.m3u8',
-        streamType: 'hls'
-      }
-    ]
+    data: {
+      cameras: [
+        {
+          id: 'front-door',
+          name: 'Front door',
+          thumbnailUrl: 'https://example.local/door/thumb.jpg',
+          streamUrl: 'https://example.local/door/live.m3u8',
+          streamType: 'hls'
+        }
+      ]
+    }
   })
 
   const wrapper = mount(CamerasView)
