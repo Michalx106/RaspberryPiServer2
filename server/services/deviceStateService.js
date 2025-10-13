@@ -1,4 +1,4 @@
-import { findDeviceById, listDevices, updateDeviceState } from '../deviceStore.js';
+import { listDevices, updateDeviceState } from '../deviceStore.js';
 import {
   applyShellySwitchState,
   extractShellySwitchState,
@@ -9,8 +9,6 @@ import {
   fetchRackSensorPayload,
   getRackSensorIntegration,
 } from '../rackSensorIntegration.js';
-
-class NoRackSensorStateChangeError extends Error {}
 
 async function refreshRackSensorDevice(device) {
   let integration;
@@ -40,39 +38,12 @@ async function refreshRackSensorDevice(device) {
     return;
   }
 
-  const liveDevice = findDeviceById(device.id);
-  const liveState = liveDevice?.state ?? {};
-
-  const changedEntries = Object.entries(statePatch).filter(
-    ([key, value]) => !Object.is(liveState[key], value),
-  );
-
-  if (changedEntries.length === 0) {
-    return;
-  }
-
-  const changedPatch = Object.fromEntries(changedEntries);
-
   try {
-    await updateDeviceState(device.id, (state) => {
-      const currentState = state ?? {};
-      const remainingEntries = Object.entries(changedPatch).filter(
-        ([key, value]) => !Object.is(currentState[key], value),
-      );
-
-      if (remainingEntries.length === 0) {
-        throw new NoRackSensorStateChangeError();
-      }
-
-      return {
-        ...currentState,
-        ...Object.fromEntries(remainingEntries),
-      };
-    });
+    await updateDeviceState(device.id, (state) => ({
+      ...(state ?? {}),
+      ...statePatch,
+    }));
   } catch (error) {
-    if (error instanceof NoRackSensorStateChangeError) {
-      return;
-    }
     console.warn('Failed to persist rack temperature sensor state:', error);
   }
 }
@@ -102,17 +73,8 @@ export async function refreshShellySwitchStates() {
           return;
         }
 
-        const currentState = findDeviceById(device.id)?.state ?? {};
-        const hasChanges = Object.entries(parsedState).some(
-          ([key, value]) => currentState?.[key] !== value,
-        );
-
-        if (!hasChanges) {
-          return;
-        }
-
         await updateDeviceState(device.id, (state) => ({
-          ...state,
+          ...(state ?? {}),
           ...parsedState,
         }));
       } catch (error) {
@@ -194,7 +156,7 @@ async function applyShellySwitchUpdate(device, desiredOn) {
   }
 
   return updateDeviceState(device.id, (state) => ({
-    ...state,
+    ...(state ?? {}),
     ...statePatch,
   }));
 }
@@ -207,7 +169,7 @@ async function handleSwitchAction(device, payload) {
   }
 
   return updateDeviceState(device.id, (state) => ({
-    ...state,
+    ...(state ?? {}),
     on: desiredOn,
   }));
 }
@@ -221,7 +183,7 @@ async function handleDimmerAction(device, payload) {
   }
 
   return updateDeviceState(device.id, (state) => ({
-    ...state,
+    ...(state ?? {}),
     level: parsedLevel,
   }));
 }
