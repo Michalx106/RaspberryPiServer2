@@ -50,6 +50,10 @@ beforeEach(async () => {
   globalThis.window = dom.window
   globalThis.document = dom.window.document
   globalThis.navigator = dom.window.navigator
+  dom.window.navigator.clipboard = {
+    async writeText() {}
+  }
+  globalThis.navigator.clipboard = dom.window.navigator.clipboard
   globalThis.SVGElement = dom.window.SVGElement
   globalThis.Element = dom.window.Element
   globalThis.Node = dom.window.Node
@@ -211,7 +215,60 @@ test('shows an RTSP helper message instead of embedding an unsupported stream', 
       /RTSP stream that cannot be played directly in the\s+browser/,
       'fallback copy should mention RTSP limitation'
     )
-    assert.match(markup, /<a[^>]+href="rtsp:\/\/admin:123456@192\.168\.0\.171\/live\/ch0"/)
+    assert.match(
+      markup,
+      /<code[^>]*>rtsp:\/\/admin:123456@192\.168\.0\.171\/live\/ch0<\/code>/,
+      'RTSP address should be rendered in a code block for easy copying'
+    )
+    assert.match(
+      markup,
+      /<button[^>]+class="[^"]*camera-stream__copy[^"]*"[^>]*>Copy link<\/button>/,
+      'Copy button should be rendered for RTSP streams'
+    )
+    assert.equal(markup.includes('href="rtsp://'), false)
+  } finally {
+    wrapper.unmount()
+  }
+})
+
+test('allows copying RTSP stream URLs for external players', async () => {
+  const CamerasView = await loadComponent('../src/views/Cameras.vue')
+  const clipboardWrites = []
+  dom.window.navigator.clipboard.writeText = async (value) => {
+    clipboardWrites.push(value)
+  }
+  axios.get = async () => ({
+    data: {
+      cameras: [
+        {
+          id: 'cam-rtsp',
+          name: 'Back garden',
+          streamUrl: 'rtsp://admin:123456@192.168.0.171/live/ch0'
+        }
+      ]
+    }
+  })
+
+  const wrapper = mount(CamerasView)
+
+  try {
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    const copyButtonEl = wrapper.element.querySelector('.camera-stream__copy')
+    assert.ok(copyButtonEl, 'Copy button should be present')
+
+    copyButtonEl.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    await nextTick()
+
+    assert.deepEqual(clipboardWrites, [
+      'rtsp://admin:123456@192.168.0.171/live/ch0'
+    ])
+    const updatedButtonEl = wrapper.element.querySelector('.camera-stream__copy')
+    assert.ok(updatedButtonEl, 'Copy button should remain in the DOM')
+    assert.equal(updatedButtonEl.textContent, 'Copied!')
   } finally {
     wrapper.unmount()
   }
