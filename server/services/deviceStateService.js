@@ -196,6 +196,8 @@ export async function performDeviceAction(device, payload) {
       return handleDimmerAction(device, payload);
     case 'sensor':
       throw new DeviceActionValidationError('Sensor devices are read-only');
+    case 'camera':
+      throw new DeviceActionValidationError('Camera devices are read-only');
     default:
       throw new DeviceActionValidationError(
         `Device type "${device.type}" does not support actions`,

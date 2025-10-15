@@ -57,9 +57,12 @@
           <span class="camera-thumbnail__placeholder">Snapshot unavailable</span>
         </div>
 
-        <div v-if="camera.streamUrl" class="camera-stream">
+        <div
+          v-if="camera.streamUrl || camera.directStreamUrl"
+          class="camera-stream"
+        >
           <video
-            v-if="!shouldRenderStreamInIframe(camera)"
+            v-if="camera.streamUrl && !shouldRenderStreamInIframe(camera) && !isRtspStream(camera)"
             class="camera-stream__player"
             controls
             playsinline
@@ -76,13 +79,29 @@
             </p>
           </video>
           <iframe
-            v-else
+            v-else-if="camera.streamUrl && !isRtspStream(camera)"
             class="camera-stream__frame"
             :src="camera.streamUrl"
             :title="`Embedded stream for ${camera.name ?? 'camera'}`"
             loading="lazy"
             allow="autoplay; encrypted-media"
           ></iframe>
+          <div v-else class="camera-stream__external" role="note">
+            <p class="camera-stream__external-text">
+              This camera exposes an RTSP stream that cannot be played directly in the
+              browser. Use a compatible player to open the address below.
+            </p>
+            <div v-if="camera.directStreamUrl" class="camera-stream__rtsp-helper">
+              <code class="camera-stream__rtsp-url">{{ camera.directStreamUrl }}</code>
+              <button
+                type="button"
+                class="camera-stream__copy"
+                @click="copyRtspUrl(camera)"
+              >
+                {{ rtspCopyWasSuccessful(camera) ? 'Copied!' : 'Copy link' }}
+              </button>
+            </div>
+          </div>
         </div>
       </article>
     </section>
@@ -107,6 +126,7 @@ const isFetching = ref(false)
 const hasLoadedOnce = ref(false)
 const errorMessage = ref('')
 const thumbnailRefreshKey = ref(Date.now())
+const rtspCopyFeedback = ref({})
 
 const AUTO_REFRESH_INTERVAL_MS = 5000
 let autoRefreshTimerId = null
@@ -126,6 +146,68 @@ const handleError = (error) => {
   errorMessage.value = error?.message ?? defaultMessage
 }
 
+const pickFirstString = (...values) =>
+  values.find((value) => typeof value === 'string' && value.trim().length > 0)
+
+const isHttpLikeUrl = (value) =>
+  typeof value === 'string' && /^https?:\/\//i.test(value.trim())
+
+const normaliseDirectStreamUrl = (camera) =>
+  pickFirstString(
+    camera?.urls?.stream,
+    camera?.urls?.streamNoAuth,
+    camera?.streamUrl,
+    camera?.stream,
+  )
+
+const normaliseCameraEntry = (camera) => {
+  if (!camera || typeof camera !== 'object') {
+    return null
+  }
+
+  const urls =
+    camera.urls && typeof camera.urls === 'object' ? camera.urls : undefined
+
+  const snapshotUrl = pickFirstString(
+    camera.thumbnailUrl,
+    camera.snapshotUrl,
+    urls?.snapshotProxy,
+    urls?.snapshot
+  )
+
+  const directStreamUrl = normaliseDirectStreamUrl(camera)
+
+  const streamUrl = pickFirstString(
+    urls?.streamProxy,
+    isHttpLikeUrl(camera.streamUrl) ? camera.streamUrl : undefined,
+    isHttpLikeUrl(urls?.stream) ? urls?.stream : undefined,
+    isHttpLikeUrl(urls?.streamNoAuth) ? urls?.streamNoAuth : undefined,
+    isHttpLikeUrl(directStreamUrl) ? directStreamUrl : undefined
+  )
+
+  const streamMimeType = pickFirstString(
+    camera.streamMimeType,
+    urls?.streamMimeType
+  )
+
+  const streamType = pickFirstString(
+    camera.streamType,
+    camera.streamFormat,
+    urls?.streamType,
+    urls?.streamFormat
+  )
+
+  return {
+    ...camera,
+    thumbnailUrl: snapshotUrl ?? '',
+    streamUrl: streamUrl ?? '',
+    directStreamUrl: directStreamUrl ?? '',
+    streamMimeType: streamMimeType ?? undefined,
+    streamType: streamType ?? undefined,
+    urls,
+  }
+}
+
 const refreshCameras = async () => {
   if (isFetching.value) {
     return
@@ -136,7 +218,14 @@ const refreshCameras = async () => {
 
   try {
     const { data } = await axios.get('/api/cameras')
-    cameras.value = Array.isArray(data) ? data : []
+    const payload = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.cameras)
+        ? data.cameras
+        : []
+    cameras.value = payload
+      .map((camera) => normaliseCameraEntry(camera))
+      .filter((camera) => camera !== null)
     thumbnailRefreshKey.value = Date.now()
   } catch (error) {
     handleError(error)
@@ -156,8 +245,18 @@ const buildThumbnailSrc = (thumbnailUrl) => {
 }
 
 const normaliseStreamType = (camera) => {
-  const type = camera?.streamType ?? camera?.streamFormat ?? ''
+  const type =
+    camera?.streamType ??
+    camera?.streamFormat ??
+    camera?.urls?.streamType ??
+    camera?.urls?.streamFormat ??
+    ''
   return typeof type === 'string' ? type.toLowerCase() : ''
+}
+
+const isRtspStream = (camera) => {
+  const url = camera?.directStreamUrl ?? camera?.streamUrl ?? ''
+  return typeof url === 'string' && url.trim().toLowerCase().startsWith('rtsp://')
 }
 
 const shouldRenderStreamInIframe = (camera) => {
@@ -166,8 +265,9 @@ const shouldRenderStreamInIframe = (camera) => {
 }
 
 const streamMimeType = (camera) => {
-  if (camera?.streamMimeType) {
-    return camera.streamMimeType
+  const mimeType = camera?.streamMimeType ?? camera?.urls?.streamMimeType
+  if (mimeType) {
+    return mimeType
   }
 
   const type = normaliseStreamType(camera)
@@ -187,6 +287,80 @@ const streamMimeType = (camera) => {
       return 'video/x-motion-jpeg'
     default:
       return undefined
+  }
+}
+
+const buildCameraKey = (camera) =>
+  pickFirstString(camera?.id, camera?.name, camera?.directStreamUrl, camera?.streamUrl)
+
+const rtspCopyWasSuccessful = (camera) => {
+  const key = buildCameraKey(camera)
+  return Boolean(key && rtspCopyFeedback.value[key])
+}
+
+const copyTextToClipboard = async (text) => {
+  if (typeof text !== 'string' || text.trim().length === 0) {
+    return false
+  }
+
+  const trimmed = text.trim()
+
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(trimmed)
+      return true
+    }
+
+    if (typeof document === 'undefined') {
+      return false
+    }
+
+    const textarea = document.createElement('textarea')
+    textarea.value = trimmed
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'absolute'
+    textarea.style.left = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    let successful = false
+    try {
+      successful = document.execCommand('copy')
+    } finally {
+      document.body.removeChild(textarea)
+    }
+    return successful
+  } catch (error) {
+    console.error('Failed to copy RTSP URL:', error)
+    return false
+  }
+}
+
+const copyRtspUrl = async (camera) => {
+  const url = camera?.directStreamUrl ?? camera?.streamUrl
+  const key = buildCameraKey(camera) || url
+
+  if (!url || !key) {
+    return
+  }
+
+  const success = await copyTextToClipboard(url)
+
+  if (!success) {
+    return
+  }
+
+  rtspCopyFeedback.value = {
+    ...rtspCopyFeedback.value,
+    [key]: true
+  }
+
+  if (typeof window !== 'undefined') {
+    window.setTimeout(() => {
+      rtspCopyFeedback.value = {
+        ...rtspCopyFeedback.value,
+        [key]: false
+      }
+    }, 2000)
   }
 }
 
@@ -241,7 +415,9 @@ onUnmounted(() => {
 defineExpose({
   buildThumbnailSrc,
   shouldRenderStreamInIframe,
-  streamMimeType
+  streamMimeType,
+  isRtspStream,
+  copyRtspUrl
 })
 </script>
 
@@ -399,6 +575,53 @@ defineExpose({
   text-decoration: underline;
 }
 
+.camera-stream__external {
+  font-size: 0.85rem;
+  color: #475569;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.camera-stream__rtsp-helper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.camera-stream__rtsp-url {
+  flex: 1 1 auto;
+  font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.camera-stream__copy {
+  border: none;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease-in-out, transform 150ms ease-in-out;
+  flex-shrink: 0;
+}
+
+.camera-stream__copy:hover {
+  background: #1d4ed8;
+}
+
+.camera-stream__copy:active {
+  transform: scale(0.97);
+}
+
 .empty-state {
   font-size: 1.05rem;
   color: #475569;
@@ -437,6 +660,19 @@ defineExpose({
   .camera-stream__fallback {
     color: #cbd5f5;
     background: rgba(15, 23, 42, 0.6);
+  }
+
+  .camera-stream__rtsp-helper {
+    background: rgba(37, 99, 235, 0.16);
+  }
+
+  .camera-stream__copy {
+    background: rgba(59, 130, 246, 0.85);
+    color: #e2e8f0;
+  }
+
+  .camera-stream__copy:hover {
+    background: rgba(37, 99, 235, 0.85);
   }
 
   .empty-state {

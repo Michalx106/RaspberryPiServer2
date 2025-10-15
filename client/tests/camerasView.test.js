@@ -34,6 +34,7 @@ let originalAxiosGet
 let originalSVGElement
 let originalElement
 let originalNode
+let originalXMLSerializer
 let mount
 let nextTick
 
@@ -45,12 +46,18 @@ beforeEach(async () => {
   originalSVGElement = globalThis.SVGElement
   originalElement = globalThis.Element
   originalNode = globalThis.Node
+  originalXMLSerializer = globalThis.XMLSerializer
   globalThis.window = dom.window
   globalThis.document = dom.window.document
   globalThis.navigator = dom.window.navigator
+  dom.window.navigator.clipboard = {
+    async writeText() {}
+  }
+  globalThis.navigator.clipboard = dom.window.navigator.clipboard
   globalThis.SVGElement = dom.window.SVGElement
   globalThis.Element = dom.window.Element
   globalThis.Node = dom.window.Node
+  globalThis.XMLSerializer = dom.window.XMLSerializer
   dom.window.setInterval = (handler) => {
     if (typeof handler === 'function') {
       handler()
@@ -102,6 +109,11 @@ afterEach(() => {
   } else {
     globalThis.Node = originalNode
   }
+  if (originalXMLSerializer === undefined) {
+    delete globalThis.XMLSerializer
+  } else {
+    globalThis.XMLSerializer = originalXMLSerializer
+  }
   dom = null
 })
 
@@ -110,15 +122,17 @@ test('renders camera snapshots returned by the API', async () => {
   assert.ok(globalThis.document, 'document should be available for Vue rendering tests')
   assert.ok(globalThis.window?.document, 'window.document should be available')
   axios.get = async () => ({
-    data: [
-      {
-        id: 'front-door',
-        name: 'Front door',
-        thumbnailUrl: 'https://example.local/door/thumb.jpg',
-        streamUrl: 'https://example.local/door/live.m3u8',
-        streamType: 'hls'
-      }
-    ]
+    data: {
+      cameras: [
+        {
+          id: 'front-door',
+          name: 'Front door',
+          thumbnailUrl: 'https://example.local/door/thumb.jpg',
+          streamUrl: 'https://example.local/door/live.m3u8',
+          streamType: 'hls'
+        }
+      ]
+    }
   })
 
   const wrapper = mount(CamerasView)
@@ -132,6 +146,129 @@ test('renders camera snapshots returned by the API', async () => {
     assert.equal(cards.length, 1)
     assert.match(cards[0].find('img').attributes('src'), /thumb\.jpg\?t=\d+$/)
     assert.equal(cards[0].text().includes('Front door'), true)
+  } finally {
+    wrapper.unmount()
+  }
+})
+
+test('renders camera data provided via integration metadata urls', async () => {
+  const CamerasView = await loadComponent('../src/views/Cameras.vue')
+  axios.get = async () => ({
+    data: {
+      cameras: [
+        {
+          id: 'cam-1',
+          name: 'Balkon',
+          urls: {
+            snapshotProxy: '/api/cameras/cam-1/snapshot',
+            streamProxy: '/api/cameras/cam-1/stream',
+            streamType: 'hls'
+          }
+        }
+      ]
+    }
+  })
+
+  const wrapper = mount(CamerasView)
+
+  try {
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    const markup = wrapper.html()
+    assert.equal(markup.includes('Snapshot unavailable'), false)
+    assert.match(markup, /<img[^>]+src="\/api\/cameras\/cam-1\/snapshot\?t=\d+"/)
+    assert.match(markup, /<source[^>]+src="\/api\/cameras\/cam-1\/stream"/)
+    assert.match(markup, /<source[^>]+type="application\/x-mpegURL"/)
+  } finally {
+    wrapper.unmount()
+  }
+})
+
+test('shows an RTSP helper message instead of embedding an unsupported stream', async () => {
+  const CamerasView = await loadComponent('../src/views/Cameras.vue')
+  axios.get = async () => ({
+    data: {
+      cameras: [
+        {
+          id: 'cam-rtsp',
+          name: 'Back garden',
+          streamUrl: 'rtsp://admin:123456@192.168.0.171/live/ch0'
+        }
+      ]
+    }
+  })
+
+  const wrapper = mount(CamerasView)
+
+  try {
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    const markup = wrapper.html()
+    assert.equal(markup.includes('camera-stream__player'), false)
+    assert.equal(markup.includes('camera-stream__frame'), false)
+    assert.match(
+      markup,
+      /RTSP stream that cannot be played directly in the\s+browser/,
+      'fallback copy should mention RTSP limitation'
+    )
+    assert.match(
+      markup,
+      /<code[^>]*>rtsp:\/\/admin:123456@192\.168\.0\.171\/live\/ch0<\/code>/,
+      'RTSP address should be rendered in a code block for easy copying'
+    )
+    assert.match(
+      markup,
+      /<button[^>]+class="[^"]*camera-stream__copy[^"]*"[^>]*>Copy link<\/button>/,
+      'Copy button should be rendered for RTSP streams'
+    )
+    assert.equal(markup.includes('href="rtsp://'), false)
+  } finally {
+    wrapper.unmount()
+  }
+})
+
+test('allows copying RTSP stream URLs for external players', async () => {
+  const CamerasView = await loadComponent('../src/views/Cameras.vue')
+  const clipboardWrites = []
+  dom.window.navigator.clipboard.writeText = async (value) => {
+    clipboardWrites.push(value)
+  }
+  axios.get = async () => ({
+    data: {
+      cameras: [
+        {
+          id: 'cam-rtsp',
+          name: 'Back garden',
+          streamUrl: 'rtsp://admin:123456@192.168.0.171/live/ch0'
+        }
+      ]
+    }
+  })
+
+  const wrapper = mount(CamerasView)
+
+  try {
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    const copyButtonEl = wrapper.element.querySelector('.camera-stream__copy')
+    assert.ok(copyButtonEl, 'Copy button should be present')
+
+    copyButtonEl.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    await nextTick()
+
+    assert.deepEqual(clipboardWrites, [
+      'rtsp://admin:123456@192.168.0.171/live/ch0'
+    ])
+    const updatedButtonEl = wrapper.element.querySelector('.camera-stream__copy')
+    assert.ok(updatedButtonEl, 'Copy button should remain in the DOM')
+    assert.equal(updatedButtonEl.textContent, 'Copied!')
   } finally {
     wrapper.unmount()
   }
