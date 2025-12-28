@@ -22,7 +22,9 @@ function assertOptionalPort(value, fieldName, fallback) {
     return fallback;
   }
 
-  const numeric = Number.parseInt(value, 10);
+  // Handle case when value is already a number
+  const numeric = typeof value === 'number' ? value : Number.parseInt(value, 10);
+  
   if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 65535) {
     throw new CameraIntegrationError(
       `${fieldName} must be an integer between 1 and 65535`,
@@ -48,11 +50,12 @@ function normalizePath(path, defaultPath) {
 function applyCredentialsToUrl(urlString, username, password) {
   try {
     const url = new URL(urlString);
+    // Only set credentials if they are not already present
     if (!url.username && username) {
-      url.username = username;
+      url.username = encodeURIComponent(username);
     }
     if (!url.password && password) {
-      url.password = password;
+      url.password = encodeURIComponent(password);
     }
     return url.toString();
   } catch (error) {
@@ -71,6 +74,7 @@ function buildHttpUrl({ ip, httpPort, snapshotPath, username, password }, includ
 
   const portSegment = httpPort && httpPort !== 80 ? `:${httpPort}` : '';
   const base = `http://${ip}${portSegment}${snapshotPath}`;
+  
   if (!includeCredentials) {
     return base;
   }
@@ -83,6 +87,10 @@ function buildRtspUrl(
   includeCredentials,
 ) {
   if (streamPath.startsWith('rtsp://')) {
+    // If it's already a full RTSP URL, return as is or with credentials
+    if (includeCredentials) {
+      return applyCredentialsToUrl(streamPath, username, password);
+    }
     return streamPath;
   }
 
