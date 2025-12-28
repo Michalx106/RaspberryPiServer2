@@ -9,6 +9,7 @@ import {
 } from '../cameraIntegration.js';
 
 const router = express.Router();
+const FETCH_TIMEOUT_MS = 10000; // 10 seconds timeout
 
 function isCameraDevice(device) {
   return device?.type === 'camera' && device.integration?.type === 'camspot-45';
@@ -36,49 +37,59 @@ function notFound(res) {
 async function proxyCameraRequest(res, targetUrl, authorizationHeader, options = {}) {
   const { fallbackUrl, fallbackAuthorizationHeader } = options;
 
-  async function performFetch(url, header) {
-    const headers = {};
-    if (header) {
-      headers.Authorization = header;
-    }
+  async function performFetch(url, header, timeoutMs = FETCH_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    return fetch(url, { headers });
-  }
-
-  async function tryWithFallback(reason) {
-    if (fallbackUrl && fallbackUrl !== targetUrl) {
-      try {
-        const fallbackResponse = await performFetch(
-          fallbackUrl,
-          fallbackAuthorizationHeader,
-        );
-        return { response: fallbackResponse };
-      } catch (fallbackError) {
-        return { error: fallbackError };
+    try {
+      const headers = {};
+      if (header) {
+        headers.Authorization = header;
       }
-    }
 
-    return { error: reason };
+      const response = await fetch(url, { 
+        headers,
+        signal: controller.signal 
+      });
+      
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
   }
 
   try {
     let response;
+    let usedFallback = false;
 
     try {
       response = await performFetch(targetUrl, authorizationHeader);
     } catch (error) {
-      const fallbackResult = await tryWithFallback(error);
-      if (fallbackResult.error) {
-        throw fallbackResult.error;
+      // Try fallback only on connection error, not on HTTP errors
+      if (fallbackUrl && fallbackUrl !== targetUrl) {
+        try {
+          response = await performFetch(fallbackUrl, fallbackAuthorizationHeader);
+          usedFallback = true;
+        } catch (fallbackError) {
+          throw error; // Throw original error if fallback also fails
+        }
+      } else {
+        throw error;
       }
-      response = fallbackResult.response;
     }
 
-    if (response.status === 401 && fallbackUrl && fallbackUrl !== targetUrl) {
+    // Try fallback on 401 only if we haven't used it yet
+    if (!usedFallback && response.status === 401 && fallbackUrl && fallbackUrl !== targetUrl) {
       try {
-        response = await performFetch(fallbackUrl, fallbackAuthorizationHeader);
+        const fallbackResponse = await performFetch(fallbackUrl, fallbackAuthorizationHeader);
+        // Only use fallback response if it's successful
+        if (fallbackResponse.ok) {
+          response = fallbackResponse;
+        }
       } catch (error) {
-        throw error;
+        // Keep original response if fallback fails
       }
     }
 
@@ -104,7 +115,16 @@ async function proxyCameraRequest(res, targetUrl, authorizationHeader, options =
     res.send(buffer);
   } catch (error) {
     res.set('Cache-Control', 'no-store');
-    res.status(502).json({ error: 'Failed to fetch data from camera' });
+    
+    // Provide more specific error messages
+    if (error.name === 'AbortError') {
+      res.status(504).json({ error: 'Camera request timeout' });
+    } else {
+      res.status(502).json({ 
+        error: 'Failed to fetch data from camera',
+        details: error.message 
+      });
+    }
   }
 }
 
