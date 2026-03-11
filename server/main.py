@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 
 from device_service_py import DEVICE_SERVICE, DeviceActionValidationError
 from metrics_service_py import gather_metrics, metrics_history, sample_loop, subscribe
+from mqtt_bridge_py import MQTT_BRIDGE
 
 app = FastAPI(title="Raspberry Pi Python Backend")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -17,6 +18,12 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(sample_loop())
+    MQTT_BRIDGE.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    MQTT_BRIDGE.stop()
 
 
 @app.get("/api/metrics/current")
@@ -47,6 +54,16 @@ async def get_devices():
 @app.post("/api/devices/{device_id}/actions")
 async def post_device_action(device_id: str, payload: dict):
     try:
-        return DEVICE_SERVICE.apply_action(device_id, payload or {})
+        device = DEVICE_SERVICE.apply_action(device_id, payload or {})
+        MQTT_BRIDGE.publish_device_state(device)
+        return device
+    except DeviceActionValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@app.post("/api/devices/{device_id}/state")
+async def post_device_state(device_id: str, payload: dict):
+    try:
+        return DEVICE_SERVICE.update_state(device_id, payload or {})
     except DeviceActionValidationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc

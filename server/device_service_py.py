@@ -77,5 +77,27 @@ class DeviceService:
             self._persist()
             return deepcopy(device)
 
+    def update_state(self, device_id: str, payload: dict):
+        with self._lock:
+            device = self._find(device_id)
+            if not device:
+                raise DeviceActionValidationError(f"Unknown device: {device_id}", 404)
+
+            if device.get("type") != "sensor":
+                raise DeviceActionValidationError("Only sensor devices support direct state updates")
+
+            state_payload = payload.get("state") if isinstance(payload, dict) else None
+            if not isinstance(state_payload, dict):
+                raise DeviceActionValidationError('State updates require {"state": {...}} payload')
+
+            merge = payload.get("merge", True)
+            if not isinstance(merge, bool):
+                raise DeviceActionValidationError('State updates require boolean "merge" field when provided')
+
+            current_state = dict(device.get("state") or {})
+            device["state"] = {**current_state, **state_payload} if merge else dict(state_payload)
+            self._persist()
+            return deepcopy(device)
+
 
 DEVICE_SERVICE = DeviceService(DEVICES_FILE_PATH)
