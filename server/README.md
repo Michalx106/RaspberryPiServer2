@@ -30,3 +30,8 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `GET /api/metrics/stream` (SSE)
 - `GET /api/devices`
 - `POST /api/devices/{id}/actions`
+
+## Status migracji
+
+- Katalog `server/` jest teraz Python-only: usunięto pliki Node/Express (`*.js`) oraz `package.json`.
+- Do uruchomienia backendu używaj wyłącznie zależności z `requirements.txt`.
