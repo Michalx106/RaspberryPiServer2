@@ -21,15 +21,15 @@
     }
   },
   {
-    "id": "ESP8266-DHT11-",
-    "name": "Temperature Sensor",
+    "id": "salon_temp",
+    "name": "Temperatura salon",
     "type": "sensor",
-    "state": {
-      "temperatureC": 0,
-      "humidityPercent": 0,
-      "stale": true,
-      "sensor": "DHT11",
-      "pin": "D1(GPIO5)"
-     }
+    "unit": "C"
+  },
+  {
+    "id": "salon_humidity",
+    "name": "Wilgotność salon",
+    "type": "sensor",
+    "unit": "%"
   }
 ]
