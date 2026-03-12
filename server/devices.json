@@ -21,14 +21,14 @@
     }
   },
   {
-    "id": "salon_temp",
-    "name": "Temperatura salon",
+    "id": "bedroom_temp",
+    "name": "Bedroom Temperature",
     "type": "sensor",
     "unit": "C"
   },
   {
-    "id": "salon_humidity",
-    "name": "Wilgotność salon",
+    "id": "bedroom_humidity",
+    "name": "Bedroom Humidity",
     "type": "sensor",
     "unit": "%"
   }
