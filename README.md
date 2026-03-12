@@ -14,7 +14,7 @@ W repo są gotowe pliki Dockera dla backendu i frontendu oraz `docker-compose.ym
 docker compose up --build -d
 ```
 
-- Frontend: `http://localhost:8080`
+- Frontend: `http://localhost:80`
 - Backend API: `http://localhost:3000`
 
 ### Zatrzymanie
