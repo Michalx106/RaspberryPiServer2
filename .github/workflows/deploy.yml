@@ -10,22 +10,25 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Sync repo to deployment directory
+      - name: Sync project
         run: |
-          mkdir -p /home/michalx106/srv/RaspberryPiServer2
           rsync -a --delete \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude '__pycache__' \
-            ./ /home/michalx106/srv/RaspberryPiServer2/
+          --exclude ".git" \
+          --exclude "node_modules" \
+          ./ /home/michalx106/srv/RaspberryPiServer2/
 
-      - name: Rebuild and restart containers
+      - name: Build backend and frontend
         run: |
           cd /home/michalx106/srv
-          docker compose up -d --build --remove-orphans
+          docker compose build api frontend
+
+      - name: Restart only backend and frontend
+        run: |
+          cd /home/michalx106/srv
+          docker compose up -d api frontend
 
       - name: Show running containers
         run: |
