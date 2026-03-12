@@ -31,6 +31,5 @@
       "sensor": "DHT11",
       "pin": "D1(GPIO5)"
      }
-    }
   }
 ]
