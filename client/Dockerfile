@@ -3,19 +3,17 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine
+FROM nginx:alpine
+
+ENV API_HOST=api
+ENV API_PORT=3000
 
 COPY nginx.conf /etc/nginx/templates/default.conf.template
-
-ENV API_HOST=backend
-ENV API_PORT=3000
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
