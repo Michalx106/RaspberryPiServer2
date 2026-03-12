@@ -10,14 +10,17 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Go to project
-        run: cd /home/michalx106/srv/RaspberryPiServer2 && pwd
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Pull latest code
+      - name: Sync repo to deployment directory
         run: |
-          cd /home/michalx106/srv/RaspberryPiServer2
-          git fetch origin main
-          git reset --hard origin/main
+          mkdir -p /home/michalx106/srv/RaspberryPiServer2
+          rsync -a --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '__pycache__' \
+            ./ /home/michalx106/srv/RaspberryPiServer2/
 
       - name: Rebuild and restart containers
         run: |
