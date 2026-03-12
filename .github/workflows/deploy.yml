@@ -1,0 +1,30 @@
+name: Deploy on Raspberry Pi
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Go to project
+        run: cd /home/michalx106/srv/RaspberryPiServer2 && pwd
+
+      - name: Pull latest code
+        run: |
+          cd /home/michalx106/srv/RaspberryPiServer2
+          git fetch origin main
+          git reset --hard origin/main
+
+      - name: Rebuild and restart containers
+        run: |
+          cd /home/michalx106/srv
+          docker compose up -d --build --remove-orphans
+
+      - name: Show running containers
+        run: |
+          cd /home/michalx106/srv
+          docker compose ps
