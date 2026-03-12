@@ -7,7 +7,15 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 
-from config_py import MQTT_BROKER_HOST, MQTT_BROKER_PORT, MQTT_ENABLED, MQTT_SENSOR_TOPIC_PREFIX
+from config_py import (
+    MQTT_BROKER_HOST,
+    MQTT_BROKER_PORT,
+    MQTT_DEVICE_TOPIC_PREFIX,
+    MQTT_ENABLED,
+    MQTT_PASSWORD,
+    MQTT_SENSOR_TOPIC_PREFIX,
+    MQTT_USERNAME,
+)
 from device_service_py import DEVICE_SERVICE, DeviceActionValidationError
 
 logger = logging.getLogger(__name__)
@@ -27,6 +35,9 @@ class MqttBridge:
             return
 
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        if MQTT_USERNAME:
+            client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+
         client.on_connect = self._on_connect
         client.on_message = self._on_message
         client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)
@@ -48,7 +59,7 @@ class MqttBridge:
         if self._client is None:
             return
 
-        topic = f"roompi/devices/{device.get('id')}/state"
+        topic = f"{MQTT_DEVICE_TOPIC_PREFIX}/{device.get('id')}/state"
         payload = json.dumps(device.get("state") or {}, ensure_ascii=False)
         self._client.publish(topic, payload, qos=0, retain=True)
 

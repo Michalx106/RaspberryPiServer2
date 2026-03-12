@@ -13,6 +13,19 @@
     }
   },
   {
+    "id": "shelly1g3-28372f2a9038",
+    "name": "Salon Light (Shelly)",
+    "type": "switch",
+    "integration": {
+      "type": "mqtt-shelly-gen3",
+      "topic": "roompi/devices/shelly1g3-28372f2a9038/state",
+      "rpcTopic": "shelly1g3-28372f2a9038/rpc"
+    },
+    "state": {
+      "on": false
+    }
+  },
+  {
     "id": "bedroom-dimmer",
     "name": "Bedroom Dimmer",
     "type": "dimmer",

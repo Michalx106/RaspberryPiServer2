@@ -26,6 +26,9 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `MQTT_BROKER_HOST` (domyślnie `127.0.0.1`)
 - `MQTT_BROKER_PORT` (domyślnie `1883`)
 - `MQTT_SENSOR_TOPIC_PREFIX` (domyślnie `roompi/sensors`)
+- `MQTT_DEVICE_TOPIC_PREFIX` (domyślnie `roompi/devices`)
+- `MQTT_USERNAME` (opcjonalnie, np. `hauser`)
+- `MQTT_PASSWORD` (opcjonalnie, hasło do brokera)
 
 ## API
 
@@ -45,6 +48,9 @@ export MQTT_ENABLED=true
 export MQTT_BROKER_HOST=127.0.0.1
 export MQTT_BROKER_PORT=1883
 export MQTT_SENSOR_TOPIC_PREFIX=roompi/sensors
+export MQTT_DEVICE_TOPIC_PREFIX=roompi/devices
+export MQTT_USERNAME=hauser
+export MQTT_PASSWORD=Kowies1234
 ```
 
 2. Uruchom backend i Mosquitto.
@@ -64,9 +70,21 @@ export MQTT_SENSOR_TOPIC_PREFIX=roompi/sensors
 4. Backend automatycznie scali payload z aktualnym `state` urządzenia typu `sensor` i zapisze do `devices.json`.
 
 5. Zmiany urządzeń sterowalnych z API są publikowane do MQTT:
-   - temat: `roompi/devices/<device_id>/state`
+   - temat: `<MQTT_DEVICE_TOPIC_PREFIX>/<device_id>/state` (domyślnie `roompi/devices/<device_id>/state`)
    - payload: JSON z aktualnym `state`
 
+
+6. Aby urządzenie pojawiało się w zakładce **Devices** frontendu, musi istnieć w `server/devices.json` jako `type: "switch"` lub `type: "dimmer"` (kamery są filtrowane do osobnej zakładki).
+   Przykład dla Shelly Gen3 sterowanego przez Node-RED:
+
+```json
+{
+  "id": "shelly1g3-28372f2a9038",
+  "name": "Salon Light (Shelly)",
+  "type": "switch",
+  "state": { "on": false }
+}
+```
 Dzięki temu możesz w Node-RED odbierać stan przekaźników/ściemniaczy i budować automatyzacje zwrotne.
 
 ## Status migracji
