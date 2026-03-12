@@ -10,27 +10,27 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Sync project
+      - name: Sync repo
         run: |
           rsync -a --delete \
-          --exclude ".git" \
-          --exclude "node_modules" \
-          ./ /home/michalx106/srv/RaspberryPiServer2/
+            --exclude ".git" \
+            --exclude "node_modules" \
+            ./ /home/michalx106/srv/RaspberryPiServer2/
 
-      - name: Build backend and frontend
+      - name: Build only backend and frontend
         run: |
-          cd /home/michalx106/srv
-          docker compose build api frontend
+          cd /home/michalx106/srv/RaspberryPiServer2
+          docker compose build backend frontend
 
       - name: Restart only backend and frontend
         run: |
-          cd /home/michalx106/srv
-          docker compose up -d api frontend
+          cd /home/michalx106/srv/RaspberryPiServer2
+          docker compose up -d backend frontend
 
-      - name: Show running containers
+      - name: Show status
         run: |
-          cd /home/michalx106/srv
+          cd /home/michalx106/srv/RaspberryPiServer2
           docker compose ps
