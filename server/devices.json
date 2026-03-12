@@ -21,24 +21,16 @@
     }
   },
   {
-    "id": "rack-temperature-sensor",
-    "name": "Rack Temperature Sensor",
+    "id": "ESP8266-DHT11-",
+    "name": "Temperature Sensor",
     "type": "sensor",
-    "integration": {
-      "type": "rack-sensor-http",
-      "ip": "192.168.0.60"
-    },
     "state": {
-      "temperatureC": 24.2,
-      "humidityPercent": 40,
-      "temperatureAvgC": 24.0,
-      "humidityAvgPercent": 39.5,
-      "avgWindow": 8,
-      "avgSamples": 4,
-      "uptimeMs": 12345,
-      "stale": false,
+      "temperatureC": 0,
+      "humidityPercent": 0,
+      "stale": true,
       "sensor": "DHT11",
       "pin": "D1(GPIO5)"
+     }
     }
   }
 ]
