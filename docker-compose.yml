@@ -1,0 +1,23 @@
+services:
+  backend:
+    build:
+      context: ./server
+    container_name: roompi-backend
+    environment:
+      - PORT=3000
+      - MQTT_ENABLED=false
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./server/devices.json:/app/devices.json
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./client
+    container_name: roompi-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
