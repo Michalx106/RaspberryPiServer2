@@ -2,10 +2,9 @@
 import { ref } from 'vue'
 import Dashboard from './views/Dashboard.vue'
 import Devices from './views/Devices.vue'
-import Cameras from './views/Cameras.vue'
 import RoomPiLogo from './assets/roompi-logo.svg'
 
-const activeView = ref('dashboard')
+const activeView = ref('devices')
 
 const setView = (view) => {
   activeView.value = view
@@ -24,15 +23,6 @@ const isActive = (view) => activeView.value === view
       <button
         type="button"
         class="nav__button"
-        :class="{ 'nav__button--active': isActive('dashboard') }"
-        @click="setView('dashboard')"
-        :aria-pressed="isActive('dashboard')"
-      >
-        Dashboard
-      </button>
-      <button
-        type="button"
-        class="nav__button"
         :class="{ 'nav__button--active': isActive('devices') }"
         @click="setView('devices')"
         :aria-pressed="isActive('devices')"
@@ -42,18 +32,17 @@ const isActive = (view) => activeView.value === view
       <button
         type="button"
         class="nav__button"
-        :class="{ 'nav__button--active': isActive('cameras') }"
-        @click="setView('cameras')"
-        :aria-pressed="isActive('cameras')"
+        :class="{ 'nav__button--active': isActive('dashboard') }"
+        @click="setView('dashboard')"
+        :aria-pressed="isActive('dashboard')"
       >
-        Cameras
+        Dashboard
       </button>
     </nav>
 
     <section class="view-container">
-      <Dashboard v-if="isActive('dashboard')" />
-      <Devices v-else-if="isActive('devices')" />
-      <Cameras v-else />
+      <Devices v-if="isActive('devices')" />
+      <Dashboard v-else />
     </section>
   </main>
 </template>
