@@ -4,6 +4,17 @@ Projekt zawiera frontend Vue (`client/`) oraz backend Python FastAPI (`server/`)
 
 Szczegóły uruchomienia backendu i formatu danych urządzeń (JSON) są opisane w `server/README.md`.
 
+
+## Konfiguracja (.env)
+
+Przed startem skopiuj plik przykładowy i uzupełnij własne dane (szczególnie MQTT login/hasło):
+
+```bash
+cp .env.example .env
+```
+
+`docker-compose.yml` korzysta teraz z wartości z `.env`, więc sekrety nie są zapisane "na sztywno" w repozytorium.
+
 ## Docker
 
 W repo są gotowe pliki Dockera dla backendu i frontendu oraz `docker-compose.yml` w katalogu głównym.
