@@ -1,6 +1,6 @@
 # Raspberry Pi Metrics Dashboard (Vue 3)
 
-This project is a Vue 3 + Vite single-page application that visualizes live and historical Raspberry Pi metrics. It listens to a server-sent events (SSE) stream for real-time updates, falls back to REST polling if the stream is unavailable, and renders a Chart.js line chart for historical trends.
+This project is a Vue 3 + Vite single-page application that visualizes live and historical Raspberry Pi metrics. It listens to a server-sent event (SSE) stream for real-time updates, falls back to REST polling if the stream is unavailable, and renders a Chart.js line chart for historical trends.
 
 ## Prerequisites
 
@@ -38,38 +38,6 @@ The dashboard primarily consumes a server-sent events stream exposed at `GET /ap
 - Optional `stream-error` events when the backend cannot deliver history data.
 
 If the SSE connection cannot be established or drops, the UI automatically falls back to periodic REST polling of `/api/metrics/current` and `/api/metrics/history` until the stream reconnects.
-
-### Cameras view
-
-The **Cameras** tab displays snapshots and optional live streams for IP cameras or other video sources exposed by your backend. The client polls `GET /api/cameras` on load and every 5 seconds (while the tab is visible) expecting an array of camera objects:
-
-```jsonc
-[
-  {
-    "id": "front-door",
-    "name": "Front door",
-    "location": "Porch",
-    "thumbnailUrl": "https://example.local/cameras/front-door/thumbnail.jpg",
-    "streamUrl": "https://example.local/cameras/front-door/live.m3u8",
-    "streamType": "hls" // optional hint used to select the best embed element
-  }
-]
-```
-
-- `thumbnailUrl` is appended with a cache-busting `?t=<timestamp>` query so the backend should accept arbitrary query strings.
-- `streamUrl` is optional; when provided, the UI will embed a `<video>` player for typical MP4/HLS/WebM sources or an `<iframe>` for MJPEG streams (`streamType: "mjpeg"`).
-- Provide `streamMimeType` if you need a specific MIME type beyond the defaults inferred from `streamType`.
-
-#### Browser requirements
-
-Native HTTP Live Streaming (HLS) playback is only supported by browsers that expose Media Source Extensions or platform-level HLS support (Safari on macOS/iOS, recent Chromium-based browsers, and Firefox 113+). For older browsers, consider supplying an MJPEG stream or fall back to the embedded `<iframe>`.
-
-#### Adding a new camera
-
-1. Ensure your backend lists the camera in `/api/cameras` with the fields above.
-2. Verify the stream URL is reachable from the browser running the dashboard (check CORS headers if the stream is hosted on another origin).
-3. Provide a JPEG/PNG snapshot endpoint for `thumbnailUrl` to show in the grid.
-4. If you rely on advanced stream formats (DASH, custom MIME types), set `streamType`/`streamMimeType` so the UI chooses the correct player element.
 
 ### Type checking & linting
 
