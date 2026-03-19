@@ -69,7 +69,7 @@
     </section>
 
     <p v-else-if="!isLoadingDevices" class="empty-state" role="status" aria-live="polite">
-      No switches, dimmers, or sensors configured yet. Camera devices have moved to the dedicated Cameras tab.
+      No devices configured yet.
     </p>
   </div>
 </template>
@@ -114,7 +114,7 @@ const handleError = (error) => {
   errorMessage.value = error.message ?? defaultMessage
 }
 
-const shouldDisplayDevice = (device) => device?.type !== 'camera'
+const shouldDisplayDevice = () => true
 
 const fetchDevices = async () => {
   if (isLoadingDevices.value) {
