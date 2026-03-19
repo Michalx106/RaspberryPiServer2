@@ -51,6 +51,16 @@ async def get_devices():
     return DEVICE_SERVICE.list_devices()
 
 
+@app.get("/api/devices/stream")
+async def devices_stream():
+    async def event_stream():
+        yield f"event: devices\ndata: {json.dumps(DEVICE_SERVICE.list_devices())}\n\n"
+        async for device in DEVICE_SERVICE.subscribe():
+            yield f"event: device\ndata: {json.dumps(device)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @app.post("/api/devices/{device_id}/actions")
 async def post_device_action(device_id: str, payload: dict):
     try:

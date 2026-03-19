@@ -2,15 +2,6 @@
   <div class="devices">
     <header class="devices__header">
       <h1>Devices</h1>
-      <button
-        class="refresh-button"
-        type="button"
-        @click="refreshDevices"
-        :disabled="isRefreshing"
-        :aria-busy="isRefreshing"
-      >
-        {{ isRefreshing ? 'Refreshing…' : 'Refresh' }}
-      </button>
     </header>
 
     <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
@@ -77,12 +68,7 @@
       </article>
     </section>
 
-    <p
-      v-else-if="!isRefreshing"
-      class="empty-state"
-      role="status"
-      aria-live="polite"
-    >
+    <p v-else-if="!isLoadingDevices" class="empty-state" role="status" aria-live="polite">
       No switches, dimmers, or sensors configured yet. Camera devices have moved to the dedicated Cameras tab.
     </p>
   </div>
@@ -94,12 +80,15 @@ import axios from 'axios'
 import { formatSensorReading as formatSensorReadingImpl } from '../utils/sensorFormatting.js'
 
 const devices = ref([])
-const isRefreshing = ref(false)
+const isLoadingDevices = ref(false)
 const errorMessage = ref('')
 const pendingDeviceIds = ref(new Set())
 
 const AUTO_REFRESH_INTERVAL_MS = 5000
 let autoRefreshTimerId = null
+let deviceStream = null
+let fallbackActive = false
+const STREAM_ENDPOINT = '/api/devices/stream'
 
 const isDevicePending = (deviceId) => pendingDeviceIds.value.has(deviceId)
 
@@ -127,11 +116,11 @@ const handleError = (error) => {
 
 const shouldDisplayDevice = (device) => device?.type !== 'camera'
 
-const refreshDevices = async () => {
-  if (isRefreshing.value) {
+const fetchDevices = async () => {
+  if (isLoadingDevices.value) {
     return
   }
-  isRefreshing.value = true
+  isLoadingDevices.value = true
   errorMessage.value = ''
 
   try {
@@ -141,7 +130,7 @@ const refreshDevices = async () => {
   } catch (error) {
     handleError(error)
   } finally {
-    isRefreshing.value = false
+    isLoadingDevices.value = false
   }
 }
 
@@ -189,6 +178,7 @@ const updateDimmer = async (device, level) => {
 const formatSensorReading = (state) => formatSensorReadingImpl(state)
 
 const stopAutoRefresh = () => {
+  fallbackActive = false
   if (autoRefreshTimerId !== null && typeof window !== 'undefined') {
     window.clearInterval(autoRefreshTimerId)
     autoRefreshTimerId = null
@@ -196,7 +186,11 @@ const stopAutoRefresh = () => {
 }
 
 const startAutoRefresh = () => {
+  if (fallbackActive) {
+    return
+  }
   stopAutoRefresh()
+  fallbackActive = true
 
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return
@@ -204,9 +198,72 @@ const startAutoRefresh = () => {
 
   autoRefreshTimerId = window.setInterval(() => {
     if (!document.hidden) {
-      refreshDevices()
+      fetchDevices()
     }
   }, AUTO_REFRESH_INTERVAL_MS)
+}
+
+const closeDeviceStream = () => {
+  if (typeof window === 'undefined' || !deviceStream) {
+    return
+  }
+
+  deviceStream.close()
+  deviceStream = null
+}
+
+const parseEventData = (event) => {
+  if (!event?.data) return null
+  try {
+    return JSON.parse(event.data)
+  } catch (error) {
+    console.warn('Unable to parse devices stream payload', error)
+    return null
+  }
+}
+
+const handleDeviceListEvent = (event) => {
+  const payload = parseEventData(event)
+  const list = Array.isArray(payload) ? payload : []
+  devices.value = list.filter(shouldDisplayDevice)
+}
+
+const handleDeviceEvent = (event) => {
+  const payload = parseEventData(event)
+  if (!payload || typeof payload !== 'object') {
+    return
+  }
+  updateDeviceInList(payload)
+}
+
+const handleDeviceStreamOpen = () => {
+  stopAutoRefresh()
+  errorMessage.value = ''
+}
+
+const handleDeviceStreamError = () => {
+  if (!fallbackActive) {
+    errorMessage.value = 'Live device stream interrupted. Switching to fallback polling.'
+    startAutoRefresh()
+  }
+}
+
+const initializeDeviceStream = () => {
+  if (typeof window === 'undefined' || deviceStream) {
+    return
+  }
+
+  if (typeof window.EventSource !== 'function') {
+    errorMessage.value = 'Live device streaming is unavailable in this browser. Using fallback polling.'
+    startAutoRefresh()
+    return
+  }
+
+  deviceStream = new EventSource(STREAM_ENDPOINT)
+  deviceStream.addEventListener('open', handleDeviceStreamOpen)
+  deviceStream.addEventListener('devices', handleDeviceListEvent)
+  deviceStream.addEventListener('device', handleDeviceEvent)
+  deviceStream.addEventListener('error', handleDeviceStreamError)
 }
 
 const handleVisibilityChange = () => {
@@ -214,14 +271,14 @@ const handleVisibilityChange = () => {
     return
   }
 
-  if (!document.hidden) {
-    refreshDevices()
+  if (!document.hidden && fallbackActive) {
+    fetchDevices()
   }
 }
 
 onMounted(() => {
-  refreshDevices()
-  startAutoRefresh()
+  fetchDevices()
+  initializeDeviceStream()
 
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -230,6 +287,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopAutoRefresh()
+  closeDeviceStream()
 
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', handleVisibilityChange)
@@ -250,32 +308,6 @@ onUnmounted(() => {
 .devices__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.refresh-button {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 999px;
-  background: #2563eb;
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 150ms ease-in-out, transform 150ms ease-in-out;
-}
-
-.refresh-button:disabled {
-  background: #93c5fd;
-  cursor: not-allowed;
-}
-
-.refresh-button:not(:disabled):hover {
-  background: #1d4ed8;
-}
-
-.refresh-button:not(:disabled):active {
-  transform: scale(0.97);
 }
 
 .device-grid {

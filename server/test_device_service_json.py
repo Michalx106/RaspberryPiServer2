@@ -1,4 +1,5 @@
 import json
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -60,3 +61,27 @@ def test_update_state_rejects_non_sensor_device(tmp_path: Path):
 
     with pytest.raises(DeviceActionValidationError):
         service.update_state("lamp", {"state": {"on": True}})
+
+
+def test_subscribe_stream_receives_device_updates(tmp_path: Path):
+    devices_path = tmp_path / "devices.json"
+    devices_path.write_text(
+        json.dumps([{"id": "lamp", "type": "switch", "state": {"on": False}}]),
+        encoding="utf-8",
+    )
+
+    service = DeviceService(devices_path)
+
+    async def run_scenario():
+        stream = service.subscribe()
+        first_message_task = asyncio.create_task(stream.__anext__())
+
+        await asyncio.sleep(0)
+        service.apply_action("lamp", {"action": "toggle"})
+        update = await asyncio.wait_for(first_message_task, timeout=1.0)
+
+        assert update["id"] == "lamp"
+        assert update["state"]["on"] is True
+        await stream.aclose()
+
+    asyncio.run(run_scenario())

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
+from typing import AsyncIterator
 
 from config_py import DEVICES_FILE_PATH
 
@@ -20,6 +22,7 @@ class DeviceService:
         self._lock = RLock()
         self._devices_path = devices_path
         self._devices = []
+        self._subscribers = set()
         self._load()
 
     def _load(self):
@@ -37,6 +40,22 @@ class DeviceService:
     def list_devices(self):
         with self._lock:
             return deepcopy(self._devices)
+
+    def _broadcast_update(self, device: dict):
+        with self._lock:
+            subscribers = list(self._subscribers)
+
+        for subscriber in subscribers:
+            try:
+                subscriber.put_nowait(deepcopy(device))
+            except asyncio.QueueFull:
+                # If the consumer is too slow, we drop old updates and keep
+                # streaming the newest state.
+                try:
+                    subscriber.get_nowait()
+                    subscriber.put_nowait(deepcopy(device))
+                except (asyncio.QueueEmpty, asyncio.QueueFull):
+                    continue
 
     def _find(self, device_id: str):
         for device in self._devices:
@@ -75,7 +94,10 @@ class DeviceService:
 
             device["state"] = state
             self._persist()
-            return deepcopy(device)
+            updated_device = deepcopy(device)
+
+        self._broadcast_update(updated_device)
+        return updated_device
 
     def update_state(self, device_id: str, payload: dict):
         with self._lock:
@@ -97,7 +119,22 @@ class DeviceService:
             current_state = dict(device.get("state") or {})
             device["state"] = {**current_state, **state_payload} if merge else dict(state_payload)
             self._persist()
-            return deepcopy(device)
+            updated_device = deepcopy(device)
+
+        self._broadcast_update(updated_device)
+        return updated_device
+
+    async def subscribe(self) -> AsyncIterator[dict]:
+        queue: asyncio.Queue = asyncio.Queue(maxsize=20)
+        with self._lock:
+            self._subscribers.add(queue)
+
+        try:
+            while True:
+                yield await queue.get()
+        finally:
+            with self._lock:
+                self._subscribers.discard(queue)
 
 
 DEVICE_SERVICE = DeviceService(DEVICES_FILE_PATH)
