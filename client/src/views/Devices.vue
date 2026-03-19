@@ -84,10 +84,9 @@ const isLoadingDevices = ref(false)
 const errorMessage = ref('')
 const pendingDeviceIds = ref(new Set())
 
-const AUTO_REFRESH_INTERVAL_MS = 5000
-let autoRefreshTimerId = null
+const STREAM_ERROR_GRACE_PERIOD_MS = 3000
+let streamErrorTimerId = null
 let deviceStream = null
-let fallbackActive = false
 const STREAM_ENDPOINT = '/api/devices/stream'
 
 const isDevicePending = (deviceId) => pendingDeviceIds.value.has(deviceId)
@@ -177,32 +176,6 @@ const updateDimmer = async (device, level) => {
 
 const formatSensorReading = (state) => formatSensorReadingImpl(state)
 
-const stopAutoRefresh = () => {
-  fallbackActive = false
-  if (autoRefreshTimerId !== null && typeof window !== 'undefined') {
-    window.clearInterval(autoRefreshTimerId)
-    autoRefreshTimerId = null
-  }
-}
-
-const startAutoRefresh = () => {
-  if (fallbackActive) {
-    return
-  }
-  stopAutoRefresh()
-  fallbackActive = true
-
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return
-  }
-
-  autoRefreshTimerId = window.setInterval(() => {
-    if (!document.hidden) {
-      fetchDevices()
-    }
-  }, AUTO_REFRESH_INTERVAL_MS)
-}
-
 const closeDeviceStream = () => {
   if (typeof window === 'undefined' || !deviceStream) {
     return
@@ -237,15 +210,32 @@ const handleDeviceEvent = (event) => {
 }
 
 const handleDeviceStreamOpen = () => {
-  stopAutoRefresh()
+  clearStreamErrorTimer()
   errorMessage.value = ''
 }
 
 const handleDeviceStreamError = () => {
-  if (!fallbackActive) {
-    errorMessage.value = 'Live device stream interrupted. Switching to fallback polling.'
-    startAutoRefresh()
+  if (streamErrorTimerId !== null || typeof window === 'undefined') {
+    return
   }
+
+  streamErrorTimerId = window.setTimeout(() => {
+    streamErrorTimerId = null
+
+    if (!deviceStream || deviceStream.readyState === window.EventSource.OPEN) {
+      return
+    }
+
+    errorMessage.value = 'Live device stream interrupted. Waiting for reconnect.'
+  }, STREAM_ERROR_GRACE_PERIOD_MS)
+}
+
+const clearStreamErrorTimer = () => {
+  if (streamErrorTimerId === null || typeof window === 'undefined') {
+    return
+  }
+  window.clearTimeout(streamErrorTimerId)
+  streamErrorTimerId = null
 }
 
 const initializeDeviceStream = () => {
@@ -254,8 +244,7 @@ const initializeDeviceStream = () => {
   }
 
   if (typeof window.EventSource !== 'function') {
-    errorMessage.value = 'Live device streaming is unavailable in this browser. Using fallback polling.'
-    startAutoRefresh()
+    errorMessage.value = 'Live device streaming is unavailable in this browser.'
     return
   }
 
@@ -266,32 +255,14 @@ const initializeDeviceStream = () => {
   deviceStream.addEventListener('error', handleDeviceStreamError)
 }
 
-const handleVisibilityChange = () => {
-  if (typeof document === 'undefined') {
-    return
-  }
-
-  if (!document.hidden && fallbackActive) {
-    fetchDevices()
-  }
-}
-
 onMounted(() => {
   fetchDevices()
   initializeDeviceStream()
-
-  if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-  }
 })
 
 onUnmounted(() => {
-  stopAutoRefresh()
+  clearStreamErrorTimer()
   closeDeviceStream()
-
-  if (typeof document !== 'undefined') {
-    document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }
 })
 </script>
 
