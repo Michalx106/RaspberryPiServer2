@@ -134,6 +134,11 @@ const fetchDevices = async () => {
 }
 
 const updateDeviceInList = (nextDevice) => {
+  if (nextDevice?._deleted === true) {
+    devices.value = devices.value.filter((device) => device.id !== nextDevice?.id)
+    return
+  }
+
   if (!shouldDisplayDevice(nextDevice)) {
     devices.value = devices.value.filter((device) => device.id !== nextDevice?.id)
     return

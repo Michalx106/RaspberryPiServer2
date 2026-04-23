@@ -85,3 +85,60 @@ def test_subscribe_stream_receives_device_updates(tmp_path: Path):
         await stream.aclose()
 
     asyncio.run(run_scenario())
+
+
+def test_create_update_delete_device(tmp_path: Path):
+    devices_path = tmp_path / "devices.json"
+    devices_path.write_text("[]", encoding="utf-8")
+    service = DeviceService(devices_path)
+
+    created = service.create_device(
+        {
+            "id": "desk-light",
+            "name": "Desk Light",
+            "type": "switch",
+            "topic": "roompi/devices/desk-light/state",
+            "state": {"on": False},
+        }
+    )
+    assert created["id"] == "desk-light"
+    assert created["state"]["on"] is False
+
+    updated = service.update_device(
+        "desk-light",
+        {
+            "name": "Desk Light Updated",
+            "type": "dimmer",
+            "state": {"level": 65},
+        },
+    )
+    assert updated["type"] == "dimmer"
+    assert updated["state"]["level"] == 65
+    assert "topic" not in updated
+
+    removed = service.delete_device("desk-light")
+    assert removed["id"] == "desk-light"
+    assert service.list_devices() == []
+
+
+def test_delete_device_broadcasts_deleted_event(tmp_path: Path):
+    devices_path = tmp_path / "devices.json"
+    devices_path.write_text(
+        json.dumps([{"id": "lamp", "name": "Lamp", "type": "switch", "state": {"on": False}}]),
+        encoding="utf-8",
+    )
+    service = DeviceService(devices_path)
+
+    async def run_scenario():
+        stream = service.subscribe()
+        first_message_task = asyncio.create_task(stream.__anext__())
+
+        await asyncio.sleep(0)
+        service.delete_device("lamp")
+        update = await asyncio.wait_for(first_message_task, timeout=1.0)
+
+        assert update["id"] == "lamp"
+        assert update["_deleted"] is True
+        await stream.aclose()
+
+    asyncio.run(run_scenario())

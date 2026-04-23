@@ -63,6 +63,114 @@ class DeviceService:
                 return device
         return None
 
+    @staticmethod
+    def _validate_device_identity(payload: dict, require_id: bool = True) -> dict:
+        device_id = payload.get("id")
+        if require_id:
+            if not isinstance(device_id, str) or not device_id.strip():
+                raise DeviceActionValidationError('Device requires non-empty string field "id"')
+            device_id = device_id.strip()
+
+        name = payload.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise DeviceActionValidationError('Device requires non-empty string field "name"')
+
+        dtype = payload.get("type")
+        allowed_types = {"switch", "dimmer", "sensor", "camera"}
+        if dtype not in allowed_types:
+            raise DeviceActionValidationError(
+                f'Device type must be one of: {", ".join(sorted(allowed_types))}'
+            )
+
+        topic = payload.get("topic")
+        if topic is not None and not isinstance(topic, str):
+            raise DeviceActionValidationError('Device field "topic" must be a string when provided')
+
+        state_payload = payload.get("state")
+        if state_payload is not None and not isinstance(state_payload, dict):
+            raise DeviceActionValidationError('Device field "state" must be an object when provided')
+
+        result = {
+            "name": name.strip(),
+            "type": dtype,
+            "state": dict(state_payload or {}),
+        }
+        if require_id:
+            result["id"] = device_id
+        if isinstance(topic, str) and topic.strip():
+            result["topic"] = topic.strip()
+        return result
+
+    @staticmethod
+    def _normalize_state(dtype: str, state: dict) -> dict:
+        normalized = dict(state or {})
+        if dtype == "switch":
+            on = normalized.get("on", False)
+            if not isinstance(on, bool):
+                raise DeviceActionValidationError('Switch state requires boolean field "on"')
+            normalized["on"] = on
+        elif dtype == "dimmer":
+            level = normalized.get("level", 0)
+            if not isinstance(level, int) or level < 0 or level > 100:
+                raise DeviceActionValidationError('Dimmer state requires integer field "level" between 0 and 100')
+            normalized["level"] = level
+        return normalized
+
+    def create_device(self, payload: dict):
+        if not isinstance(payload, dict):
+            raise DeviceActionValidationError("Invalid device payload")
+
+        validated = self._validate_device_identity(payload, require_id=True)
+        validated["state"] = self._normalize_state(validated["type"], validated["state"])
+
+        with self._lock:
+            if self._find(validated["id"]):
+                raise DeviceActionValidationError(f'Device with id "{validated["id"]}" already exists', 409)
+            self._devices.append(validated)
+            self._persist()
+            created_device = deepcopy(validated)
+
+        self._broadcast_update(created_device)
+        return created_device
+
+    def update_device(self, device_id: str, payload: dict):
+        if not isinstance(payload, dict):
+            raise DeviceActionValidationError("Invalid device payload")
+
+        validated = self._validate_device_identity(payload, require_id=False)
+        validated["state"] = self._normalize_state(validated["type"], validated["state"])
+
+        with self._lock:
+            device = self._find(device_id)
+            if not device:
+                raise DeviceActionValidationError(f"Unknown device: {device_id}", 404)
+
+            device["name"] = validated["name"]
+            device["type"] = validated["type"]
+            device["state"] = validated["state"]
+            if "topic" in validated:
+                device["topic"] = validated["topic"]
+            else:
+                device.pop("topic", None)
+
+            self._persist()
+            updated_device = deepcopy(device)
+
+        self._broadcast_update(updated_device)
+        return updated_device
+
+    def delete_device(self, device_id: str):
+        with self._lock:
+            index = next((idx for idx, item in enumerate(self._devices) if item.get("id") == device_id), -1)
+            if index < 0:
+                raise DeviceActionValidationError(f"Unknown device: {device_id}", 404)
+
+            removed_device = deepcopy(self._devices.pop(index))
+            self._persist()
+
+        self._broadcast_update({"id": device_id, "_deleted": True})
+        return removed_device
+
     def apply_action(self, device_id: str, payload: dict):
         with self._lock:
             device = self._find(device_id)

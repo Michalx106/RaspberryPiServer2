@@ -39,6 +39,9 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `GET /api/devices`
 - `POST /api/devices/{id}/actions`
 - `POST /api/devices/{id}/state` (aktualizacja stanu sensora)
+- `POST /api/admin/devices` (dodanie urządzenia)
+- `PUT /api/admin/devices/{id}` (edycja urządzenia)
+- `DELETE /api/admin/devices/{id}` (usunięcie urządzenia)
 
 ## Historia metryk
 
