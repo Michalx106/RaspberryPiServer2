@@ -77,3 +77,27 @@ async def post_device_state(device_id: str, payload: dict):
         return DEVICE_SERVICE.update_state(device_id, payload or {})
     except DeviceActionValidationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@app.post("/api/admin/devices")
+async def post_admin_device(payload: dict):
+    try:
+        return DEVICE_SERVICE.create_device(payload or {})
+    except DeviceActionValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@app.put("/api/admin/devices/{device_id}")
+async def put_admin_device(device_id: str, payload: dict):
+    try:
+        return DEVICE_SERVICE.update_device(device_id, payload or {})
+    except DeviceActionValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@app.delete("/api/admin/devices/{device_id}")
+async def delete_admin_device(device_id: str):
+    try:
+        return DEVICE_SERVICE.delete_device(device_id)
+    except DeviceActionValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
