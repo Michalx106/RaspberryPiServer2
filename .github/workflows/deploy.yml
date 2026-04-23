@@ -18,6 +18,15 @@ jobs:
           rsync -a --delete \
             --exclude ".git" \
             --exclude "node_modules" \
+            --exclude='certbot/' \
+            --exclude "certbot/www/" \
+            --exclude "certbot/conf/" \
+            --exclude "homeassistant/" \
+            --exclude "mosquitto/" \
+            --exclude "portainer/" \
+            --exclude "volumes/" \
+            --exclude "docker-data/" \
+            --exclude "runtime/" \
             ./ /home/michalx106/srv/RaspberryPiServer2/
 
       - name: Build only backend and frontend
