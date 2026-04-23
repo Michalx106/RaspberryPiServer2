@@ -1,16 +1,6 @@
 <script setup>
-import { ref } from 'vue'
-import Dashboard from './views/Dashboard.vue'
-import Devices from './views/Devices.vue'
+import { RouterLink, RouterView } from 'vue-router'
 import RoomPiLogo from './assets/roompi-logo.svg'
-
-const activeView = ref('devices')
-
-const setView = (view) => {
-  activeView.value = view
-}
-
-const isActive = (view) => activeView.value === view
 </script>
 
 <template>
@@ -20,29 +10,24 @@ const isActive = (view) => activeView.value === view
       <h1 class="app-header__title">RoomPi</h1>
     </header>
     <nav class="nav">
-      <button
-        type="button"
+      <RouterLink
+        to="/devices"
         class="nav__button"
-        :class="{ 'nav__button--active': isActive('devices') }"
-        @click="setView('devices')"
-        :aria-pressed="isActive('devices')"
+        active-class="nav__button--active"
       >
         Devices
-      </button>
-      <button
-        type="button"
+      </RouterLink>
+      <RouterLink
+        to="/dashboard"
         class="nav__button"
-        :class="{ 'nav__button--active': isActive('dashboard') }"
-        @click="setView('dashboard')"
-        :aria-pressed="isActive('dashboard')"
+        active-class="nav__button--active"
       >
         Dashboard
-      </button>
+      </RouterLink>
     </nav>
 
     <section class="view-container">
-      <Devices v-if="isActive('devices')" />
-      <Dashboard v-else />
+      <RouterView />
     </section>
   </main>
 </template>
@@ -97,6 +82,7 @@ const isActive = (view) => activeView.value === view
   cursor: pointer;
   transition: transform 150ms ease-in-out, box-shadow 150ms ease-in-out;
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.1);
+  text-decoration: none;
 }
 
 .nav__button:hover {
