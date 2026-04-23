@@ -22,6 +22,7 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `PORT` (domyślnie `3000`)
 - `SAMPLE_INTERVAL_MS` (domyślnie `1000`)
 - `MAX_METRIC_SAMPLES` (domyślnie `1000`)
+- `METRICS_DB_PATH` (domyślnie `server/metrics.sqlite3`)
 - `MQTT_ENABLED` (`true/false`, domyślnie `false`)
 - `MQTT_BROKER_HOST` (domyślnie `127.0.0.1`)
 - `MQTT_BROKER_PORT` (domyślnie `1883`)
@@ -38,6 +39,12 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `GET /api/devices`
 - `POST /api/devices/{id}/actions`
 - `POST /api/devices/{id}/state` (aktualizacja stanu sensora)
+
+## Historia metryk
+
+- Historia metryk nie jest już trzymana w RAM (`deque`), tylko w lekkiej bazie SQLite.
+- Plik bazy domyślnie: `server/metrics.sqlite3` (zmienisz przez `METRICS_DB_PATH`).
+- Po przekroczeniu `MAX_METRIC_SAMPLES` najstarsze rekordy są automatycznie usuwane.
 
 ## Integracja z Node-RED + Mosquitto (MQTT)
 
