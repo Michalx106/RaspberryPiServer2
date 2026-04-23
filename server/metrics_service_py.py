@@ -1,14 +1,68 @@
 from __future__ import annotations
 
 import asyncio
-from collections import deque
 from datetime import datetime, timezone
+import json
+import sqlite3
+import threading
 import psutil
 
-from config_py import MAX_METRIC_SAMPLES, SAMPLE_INTERVAL_MS
+from config_py import MAX_METRIC_SAMPLES, METRICS_DB_PATH, SAMPLE_INTERVAL_MS
 
-_metrics_history = deque(maxlen=MAX_METRIC_SAMPLES)
 _subscribers: set[asyncio.Queue] = set()
+_db_lock = threading.Lock()
+
+
+def _connect() -> sqlite3.Connection:
+    return sqlite3.connect(METRICS_DB_PATH)
+
+
+def _init_db() -> None:
+    with _db_lock, _connect() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS metric_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                payload TEXT NOT NULL
+            )
+            """
+        )
+        connection.commit()
+
+
+def _store_sample(sample: dict) -> None:
+    serialized = json.dumps(sample)
+    timestamp = sample.get("timestamp") or datetime.now(timezone.utc).isoformat()
+    with _db_lock, _connect() as connection:
+        connection.execute(
+            "INSERT INTO metric_samples (timestamp, payload) VALUES (?, ?)",
+            (timestamp, serialized),
+        )
+        connection.execute(
+            """
+            DELETE FROM metric_samples
+            WHERE id NOT IN (
+                SELECT id FROM metric_samples
+                ORDER BY id DESC
+                LIMIT ?
+            )
+            """,
+            (MAX_METRIC_SAMPLES,),
+        )
+        connection.commit()
+
+
+def _load_samples() -> list[dict]:
+    with _db_lock, _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT payload
+            FROM metric_samples
+            ORDER BY id ASC
+            """
+        ).fetchall()
+    return [json.loads(payload) for (payload,) in rows]
 
 
 def _extract_temperature_metrics() -> dict:
@@ -67,14 +121,14 @@ def metrics_history() -> dict:
     return {
         "intervalMs": SAMPLE_INTERVAL_MS,
         "maxSamples": MAX_METRIC_SAMPLES,
-        "samples": list(_metrics_history),
+        "samples": _load_samples(),
     }
 
 
 async def sample_loop():
     while True:
         sample = gather_metrics()
-        _metrics_history.append(sample)
+        _store_sample(sample)
         for queue in list(_subscribers):
             await queue.put(sample)
         await asyncio.sleep(SAMPLE_INTERVAL_MS / 1000)
@@ -89,3 +143,6 @@ async def subscribe():
             yield item
     finally:
         _subscribers.discard(queue)
+
+
+_init_db()
