@@ -6,6 +6,7 @@ Backend został przeniesiony z Node/Express do Pythona (FastAPI), a stan urządz
 
 ```bash
 cd server
+cp .env.example .env
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -30,7 +31,11 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `MQTT_DEVICE_TOPIC_PREFIX` (domyślnie `roompi/devices`)
 - `MQTT_USERNAME` (opcjonalnie, np. `hauser`)
 - `MQTT_PASSWORD` (opcjonalnie, hasło do brokera)
-- `ADMIN_API_TOKEN` (wymagany do wszystkich endpointów `/api/admin/*`, przekazywany w nagłówku `X-Admin-Token`)
+- `ADMIN_USERNAME` (login administratora, wymagany do `/api/admin/login`)
+- `ADMIN_PASSWORD` (hasło administratora, wymagane do `/api/admin/login`)
+- `ADMIN_JWT_SECRET` (sekret do podpisywania JWT, wymagany do `/api/admin/*`)
+- `ADMIN_JWT_ALGORITHM` (domyślnie `HS256`)
+- `ADMIN_JWT_EXPIRES_MINUTES` (domyślnie `120`)
 
 ## API
 
@@ -40,9 +45,10 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `GET /api/devices`
 - `POST /api/devices/{id}/actions`
 - `POST /api/devices/{id}/state` (aktualizacja stanu sensora)
-- `POST /api/admin/devices` (dodanie urządzenia, wymaga `X-Admin-Token`)
-- `PUT /api/admin/devices/{id}` (edycja urządzenia, wymaga `X-Admin-Token`)
-- `DELETE /api/admin/devices/{id}` (usunięcie urządzenia, wymaga `X-Admin-Token`)
+- `POST /api/admin/login` (zwraca `access_token` JWT po poprawnym loginie/haśle)
+- `POST /api/admin/devices` (dodanie urządzenia, wymaga `Authorization: Bearer <jwt>`)
+- `PUT /api/admin/devices/{id}` (edycja urządzenia, wymaga `Authorization: Bearer <jwt>`)
+- `DELETE /api/admin/devices/{id}` (usunięcie urządzenia, wymaga `Authorization: Bearer <jwt>`)
 
 ## Historia metryk
 
@@ -61,7 +67,7 @@ export MQTT_BROKER_PORT=1883
 export MQTT_SENSOR_TOPIC_PREFIX=roompi/sensors
 export MQTT_DEVICE_TOPIC_PREFIX=roompi/devices
 export MQTT_USERNAME=hauser
-export MQTT_PASSWORD=Kowies1234
+export MQTT_PASSWORD=your-mqtt-password
 ```
 
 2. Uruchom backend i Mosquitto.

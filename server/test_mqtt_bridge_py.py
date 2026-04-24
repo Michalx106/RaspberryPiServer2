@@ -77,7 +77,7 @@ def test_start_sets_credentials_and_connects(monkeypatch):
 
     monkeypatch.setattr(mqtt_bridge_py, "MQTT_ENABLED", True)
     monkeypatch.setattr(mqtt_bridge_py, "MQTT_USERNAME", "hauser")
-    monkeypatch.setattr(mqtt_bridge_py, "MQTT_PASSWORD", "Kowies1234")
+    monkeypatch.setattr(mqtt_bridge_py, "MQTT_PASSWORD", "mqtt-test-password")
     monkeypatch.setattr(mqtt_bridge_py, "MQTT_BROKER_HOST", "192.168.0.151")
     monkeypatch.setattr(mqtt_bridge_py, "MQTT_BROKER_PORT", 1883)
     monkeypatch.setattr(mqtt_bridge_py.mqtt, "Client", fake_client)
@@ -89,7 +89,7 @@ def test_start_sets_credentials_and_connects(monkeypatch):
     assert len(created_clients) == 1
     client = created_clients[0]
     assert client.username == "hauser"
-    assert client.password == "Kowies1234"
+    assert client.password == "mqtt-test-password"
     assert client.connected == ("192.168.0.151", 1883, 60)
     assert bridge._thread.started is True
 

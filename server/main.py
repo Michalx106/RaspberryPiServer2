@@ -2,27 +2,55 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 
+import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from config_py import (
+    ADMIN_JWT_ALGORITHM,
+    ADMIN_JWT_EXPIRES_MINUTES,
+    ADMIN_JWT_SECRET,
+    ADMIN_PASSWORD,
+    ADMIN_USERNAME,
+)
 from device_service_py import DEVICE_SERVICE, DeviceActionValidationError
 from metrics_service_py import gather_metrics, metrics_history, sample_loop, subscribe
 from mqtt_bridge_py import MQTT_BRIDGE
-from config_py import ADMIN_API_TOKEN
 
 app = FastAPI(title="Raspberry Pi Python Backend")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 
-def verify_admin_token(x_admin_token: str | None = Header(default=None)) -> None:
-    configured_token = ADMIN_API_TOKEN
-    if not configured_token:
-        raise HTTPException(status_code=503, detail="ADMIN_API_TOKEN is not configured on the server.")
+def create_admin_access_token() -> str:
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=ADMIN_JWT_EXPIRES_MINUTES)
+    payload = {
+        "sub": "admin",
+        "exp": expires_at,
+    }
+    return jwt.encode(payload, ADMIN_JWT_SECRET, algorithm=ADMIN_JWT_ALGORITHM)
 
-    if x_admin_token != configured_token:
-        raise HTTPException(status_code=401, detail="Unauthorized admin token.")
+
+def verify_admin_token(authorization: str | None = Header(default=None)) -> None:
+    if not ADMIN_JWT_SECRET:
+        raise HTTPException(status_code=503, detail="ADMIN_JWT_SECRET is not configured on the server.")
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Bearer token.")
+
+    token = authorization.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing Bearer token.")
+
+    try:
+        payload = jwt.decode(token, ADMIN_JWT_SECRET, algorithms=[ADMIN_JWT_ALGORITHM])
+    except jwt.PyJWTError as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired token.") from exc
+
+    if payload.get("sub") != "admin":
+        raise HTTPException(status_code=401, detail="Invalid token subject.")
 
 
 @app.on_event("startup")
@@ -36,10 +64,27 @@ async def shutdown_event():
     MQTT_BRIDGE.stop()
 
 
-
 @app.get("/health")
 async def healthcheck():
     return {"status": "ok"}
+
+
+@app.post("/api/admin/login")
+async def admin_login(payload: dict):
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+        raise HTTPException(status_code=503, detail="ADMIN_USERNAME/ADMIN_PASSWORD are not configured on the server.")
+
+    username = payload.get("username")
+    password = payload.get("password")
+    if username != ADMIN_USERNAME or password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials.")
+
+    return {
+        "access_token": create_admin_access_token(),
+        "token_type": "bearer",
+        "expires_in_minutes": ADMIN_JWT_EXPIRES_MINUTES,
+    }
+
 
 @app.get("/api/metrics/current")
 async def get_metrics_current():

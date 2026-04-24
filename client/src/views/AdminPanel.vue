@@ -137,7 +137,7 @@ const fetchDevices = async () => {
 
 const getAdminRequestConfig = () => ({
   headers: {
-    'X-Admin-Token': getAdminApiToken(),
+    Authorization: `Bearer ${getAdminApiToken()}`,
   },
 })
 

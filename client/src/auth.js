@@ -1,62 +1,72 @@
+import axios from 'axios'
 import { computed, ref } from 'vue'
-import adminCredentials from './config/adminCredentials.json'
 
-const SESSION_STORAGE_KEY = 'roompi-admin-authenticated'
+const SESSION_STORAGE_AUTH_KEY = 'roompi-admin-authenticated'
+const SESSION_STORAGE_TOKEN_KEY = 'roompi-admin-token'
 
 const isAuthenticated = ref(false)
+const adminToken = ref('')
 
 const isBrowserEnvironment =
   typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined'
 
 const readStoredState = () => {
   if (!isBrowserEnvironment) {
-    return false
+    return {
+      isAuthenticated: false,
+      token: '',
+    }
   }
 
-  return window.sessionStorage.getItem(SESSION_STORAGE_KEY) === 'true'
+  const storedToken = window.sessionStorage.getItem(SESSION_STORAGE_TOKEN_KEY) || ''
+  return {
+    isAuthenticated: window.sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY) === 'true' && Boolean(storedToken),
+    token: storedToken,
+  }
 }
 
-const persistState = (value) => {
+const persistState = ({ authenticated, token }) => {
   if (!isBrowserEnvironment) {
     return
   }
 
-  window.sessionStorage.setItem(SESSION_STORAGE_KEY, value ? 'true' : 'false')
-}
+  window.sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, authenticated ? 'true' : 'false')
 
-isAuthenticated.value = readStoredState()
-
-const getCredentials = () => {
-  if (!adminCredentials || typeof adminCredentials !== 'object') {
-    return {
-      username: '',
-      password: '',
-    }
+  if (token) {
+    window.sessionStorage.setItem(SESSION_STORAGE_TOKEN_KEY, token)
+    return
   }
 
-  return {
-    username: adminCredentials.username ?? '',
-    password: adminCredentials.password ?? '',
-    token: adminCredentials.token ?? '',
-  }
+  window.sessionStorage.removeItem(SESSION_STORAGE_TOKEN_KEY)
 }
 
-export const getAdminApiToken = () => getCredentials().token
+const initialState = readStoredState()
+isAuthenticated.value = initialState.isAuthenticated
+adminToken.value = initialState.token
+
+export const getAdminApiToken = () => adminToken.value
 
 export const useAdminAuth = () => {
-  const login = ({ username, password }) => {
-    const credentials = getCredentials()
-    const loginSucceeded =
-      username === credentials.username && password === credentials.password
+  const login = async ({ username, password }) => {
+    const { data } = await axios.post('/api/admin/login', {
+      username,
+      password,
+    })
+
+    const token = data?.access_token || ''
+    const loginSucceeded = Boolean(token)
 
     isAuthenticated.value = loginSucceeded
-    persistState(loginSucceeded)
+    adminToken.value = token
+    persistState({ authenticated: loginSucceeded, token })
+
     return loginSucceeded
   }
 
   const logout = () => {
     isAuthenticated.value = false
-    persistState(false)
+    adminToken.value = ''
+    persistState({ authenticated: false, token: '' })
   }
 
   return {

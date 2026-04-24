@@ -100,3 +100,10 @@ server {
 ```
 
 Adjust the upstream target to match your backend's address.
+
+
+### Admin authentication
+
+Panel `/admin` uses backend JWT auth. Login form sends credentials to `POST /api/admin/login` and stores returned access token in session storage for the browser session.
+
+No admin secrets are stored in frontend source code.
