@@ -101,6 +101,7 @@
 import axios from 'axios'
 import { onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { getAdminApiToken } from '../auth'
 
 const devices = ref([])
 const errorMessage = ref('')
@@ -133,6 +134,12 @@ const fetchDevices = async () => {
   const { data } = await axios.get('/api/devices')
   devices.value = Array.isArray(data) ? data : []
 }
+
+const getAdminRequestConfig = () => ({
+  headers: {
+    'X-Admin-Token': getAdminApiToken(),
+  },
+})
 
 const buildPayload = () => {
   const payload = {
@@ -173,10 +180,10 @@ const saveDevice = async () => {
     const payload = buildPayload()
 
     if (editingDeviceId.value) {
-      await axios.put(`/api/admin/devices/${editingDeviceId.value}`, payload)
+      await axios.put(`/api/admin/devices/${editingDeviceId.value}`, payload, getAdminRequestConfig())
       successMessage.value = 'Zapisano zmiany urządzenia.'
     } else {
-      await axios.post('/api/admin/devices', payload)
+      await axios.post('/api/admin/devices', payload, getAdminRequestConfig())
       successMessage.value = 'Dodano nowe urządzenie.'
     }
 
@@ -211,7 +218,7 @@ const removeDevice = async (device) => {
   successMessage.value = ''
 
   try {
-    await axios.delete(`/api/admin/devices/${device.id}`)
+    await axios.delete(`/api/admin/devices/${device.id}`, getAdminRequestConfig())
     if (editingDeviceId.value === device.id) {
       resetForm()
     }

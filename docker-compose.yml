@@ -12,6 +12,7 @@ services:
       - MQTT_DEVICE_TOPIC_PREFIX=roompi/devices
       - MQTT_USERNAME=hauser
       - MQTT_PASSWORD=Kowies1234
+      - ADMIN_API_TOKEN=Kowies1234
     ports:
       - "3000:3000"
     volumes:

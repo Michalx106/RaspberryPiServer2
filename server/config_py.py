@@ -18,3 +18,4 @@ MQTT_SENSOR_TOPIC_PREFIX = os.environ.get("MQTT_SENSOR_TOPIC_PREFIX", "roompi/se
 MQTT_DEVICE_TOPIC_PREFIX = os.environ.get("MQTT_DEVICE_TOPIC_PREFIX", "roompi/devices")
 MQTT_USERNAME = os.environ.get("MQTT_USERNAME")
 MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD")
+ADMIN_API_TOKEN = os.environ.get("ADMIN_API_TOKEN")

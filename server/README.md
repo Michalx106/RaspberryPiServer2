@@ -30,6 +30,7 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `MQTT_DEVICE_TOPIC_PREFIX` (domyślnie `roompi/devices`)
 - `MQTT_USERNAME` (opcjonalnie, np. `hauser`)
 - `MQTT_PASSWORD` (opcjonalnie, hasło do brokera)
+- `ADMIN_API_TOKEN` (wymagany do wszystkich endpointów `/api/admin/*`, przekazywany w nagłówku `X-Admin-Token`)
 
 ## API
 
@@ -39,9 +40,9 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `GET /api/devices`
 - `POST /api/devices/{id}/actions`
 - `POST /api/devices/{id}/state` (aktualizacja stanu sensora)
-- `POST /api/admin/devices` (dodanie urządzenia)
-- `PUT /api/admin/devices/{id}` (edycja urządzenia)
-- `DELETE /api/admin/devices/{id}` (usunięcie urządzenia)
+- `POST /api/admin/devices` (dodanie urządzenia, wymaga `X-Admin-Token`)
+- `PUT /api/admin/devices/{id}` (edycja urządzenia, wymaga `X-Admin-Token`)
+- `DELETE /api/admin/devices/{id}` (usunięcie urządzenia, wymaga `X-Admin-Token`)
 
 ## Historia metryk
 
