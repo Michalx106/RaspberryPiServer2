@@ -37,8 +37,11 @@ const getCredentials = () => {
   return {
     username: adminCredentials.username ?? '',
     password: adminCredentials.password ?? '',
+    token: adminCredentials.token ?? '',
   }
 }
+
+export const getAdminApiToken = () => getCredentials().token
 
 export const useAdminAuth = () => {
   const login = ({ username, password }) => {
