@@ -30,18 +30,23 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `MQTT_DEVICE_TOPIC_PREFIX` (domyślnie `roompi/devices`)
 - `MQTT_USERNAME` (opcjonalnie, np. `hauser`)
 - `MQTT_PASSWORD` (opcjonalnie, hasło do brokera)
+- `ADMIN_USERNAME` (domyślnie `michalx106`)
+- `ADMIN_PASSWORD` (domyślnie `Kowies1234`)
+- `JWT_SECRET` (domyślnie `change-me-in-production` - ustaw własny w produkcji)
+- `JWT_EXPIRE_MINUTES` (domyślnie `120`)
 
 ## API
 
+- `POST /api/admin/login` (zwraca JWT dla admina)
 - `GET /api/metrics/current`
 - `GET /api/metrics/history`
 - `GET /api/metrics/stream` (SSE)
 - `GET /api/devices`
 - `POST /api/devices/{id}/actions`
 - `POST /api/devices/{id}/state` (aktualizacja stanu sensora)
-- `POST /api/admin/devices` (dodanie urządzenia)
-- `PUT /api/admin/devices/{id}` (edycja urządzenia)
-- `DELETE /api/admin/devices/{id}` (usunięcie urządzenia)
+- `POST /api/admin/devices` (dodanie urządzenia, wymaga `Authorization: Bearer <token>`)
+- `PUT /api/admin/devices/{id}` (edycja urządzenia, wymaga `Authorization: Bearer <token>`)
+- `DELETE /api/admin/devices/{id}` (usunięcie urządzenia, wymaga `Authorization: Bearer <token>`)
 
 ## Historia metryk
 
