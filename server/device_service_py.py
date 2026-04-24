@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,8 +35,10 @@ class DeviceService:
                 self._persist()
 
     def _persist(self):
-        serialized = json.dumps(self._devices, ensure_ascii=False, indent=2)
-        self._devices_path.write_text(serialized + "\n", encoding="utf-8")
+        serialized = json.dumps(self._devices, ensure_ascii=False, indent=2) + "\n"
+        temp_path = self._devices_path.with_name(f"{self._devices_path.name}.tmp")
+        temp_path.write_text(serialized, encoding="utf-8")
+        os.replace(temp_path, self._devices_path)
 
     def list_devices(self):
         with self._lock:

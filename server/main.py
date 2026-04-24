@@ -36,6 +36,11 @@ async def shutdown_event():
     MQTT_BRIDGE.stop()
 
 
+
+@app.get("/health")
+async def healthcheck():
+    return {"status": "ok"}
+
 @app.get("/api/metrics/current")
 async def get_metrics_current():
     return gather_metrics()

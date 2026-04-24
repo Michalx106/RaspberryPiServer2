@@ -29,3 +29,12 @@ def test_admin_endpoints_accept_valid_token(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["id"] == "desk-light-auth"
+
+
+def test_healthcheck_endpoint():
+    client = TestClient(main.app)
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}

@@ -142,3 +142,18 @@ def test_delete_device_broadcasts_deleted_event(tmp_path: Path):
         await stream.aclose()
 
     asyncio.run(run_scenario())
+
+
+def test_persist_uses_atomic_replace_without_temp_leak(tmp_path: Path):
+    devices_path = tmp_path / "devices.json"
+    devices_path.write_text(
+        json.dumps([{"id": "lamp", "name": "Lamp", "type": "switch", "state": {"on": False}}]),
+        encoding="utf-8",
+    )
+
+    service = DeviceService(devices_path)
+    service.apply_action("lamp", {"action": "toggle"})
+
+    persisted = json.loads(devices_path.read_text(encoding="utf-8"))
+    assert persisted[0]["state"]["on"] is True
+    assert not (tmp_path / "devices.json.tmp").exists()
