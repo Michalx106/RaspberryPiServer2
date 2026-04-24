@@ -43,21 +43,25 @@ const router = useRouter()
 const route = useRoute()
 const { login } = useAdminAuth()
 
-const submitLogin = () => {
+const submitLogin = async () => {
   errorMessage.value = ''
 
-  const isSuccess = login({
-    username: username.value,
-    password: password.value,
-  })
+  try {
+    const isSuccess = await login({
+      username: username.value,
+      password: password.value,
+    })
 
-  if (!isSuccess) {
-    errorMessage.value = 'Niepoprawny login lub hasło.'
-    return
+    if (!isSuccess) {
+      errorMessage.value = 'Niepoprawny login lub hasło.'
+      return
+    }
+
+    const redirectPath = typeof route.query.redirect === 'string' ? route.query.redirect : '/admin'
+    router.push(redirectPath)
+  } catch (error) {
+    errorMessage.value = error?.response?.data?.detail ?? 'Niepoprawny login lub hasło.'
   }
-
-  const redirectPath = typeof route.query.redirect === 'string' ? route.query.redirect : '/admin'
-  router.push(redirectPath)
 }
 </script>
 
