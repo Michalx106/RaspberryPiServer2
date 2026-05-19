@@ -9,6 +9,16 @@ const { isAuthenticated, logout } = useAdminAuth()
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))
 
+const serviceLinks = [
+  { name: 'Portainer', url: 'https://localhost:9443' },
+  { name: 'Pi-hole', url: 'http://localhost:8081' },
+  { name: 'Node-RED', url: 'http://localhost:1880' },
+  { name: 'Uptime Kuma', url: 'http://localhost:3001' },
+  { name: 'Speedtest Tracker', url: 'http://localhost:8095' },
+  { name: 'Mosquitto', url: 'http://localhost:1883' },
+  { name: 'Dozzle', url: 'http://localhost:9999' },
+]
+
 const handleLogout = () => {
   logout()
 }
@@ -51,6 +61,16 @@ const handleLogout = () => {
       >
         Admin login
       </RouterLink>
+      <a
+        v-for="service in serviceLinks"
+        :key="service.name"
+        :href="service.url"
+        class="nav__button nav__button--external"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {{ service.name }}
+      </a>
       <button
         v-if="isAuthenticated && isAdminRoute"
         type="button"
@@ -104,6 +124,7 @@ const handleLogout = () => {
   justify-content: center;
   gap: 1rem;
   padding: 1.5rem 2rem 0.5rem;
+  flex-wrap: wrap;
 }
 
 .nav__button {
@@ -128,6 +149,11 @@ const handleLogout = () => {
   background: #2563eb;
   color: #fff;
   box-shadow: 0 15px 35px rgba(37, 99, 235, 0.35);
+}
+
+.nav__button--external {
+  background: #0f766e;
+  color: #fff;
 }
 
 .nav__button--danger {
@@ -161,6 +187,10 @@ const handleLogout = () => {
   .nav__button--active {
     background: #2563eb;
     box-shadow: 0 20px 45px rgba(37, 99, 235, 0.55);
+  }
+
+  .nav__button--external {
+    background: #0f766e;
   }
 
   .nav__button--danger {
