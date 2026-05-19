@@ -9,6 +9,7 @@ const { isAuthenticated, logout } = useAdminAuth()
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))
 
+
 const handleLogout = () => {
   logout()
 }
@@ -130,6 +131,7 @@ const handleLogout = () => {
   box-shadow: 0 15px 35px rgba(37, 99, 235, 0.35);
 }
 
+
 .nav__button--danger {
   background: #dc2626;
   color: #fff;
@@ -162,6 +164,7 @@ const handleLogout = () => {
     background: #2563eb;
     box-shadow: 0 20px 45px rgba(37, 99, 235, 0.55);
   }
+
 
   .nav__button--danger {
     background: #dc2626;
