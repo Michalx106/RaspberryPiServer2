@@ -52,6 +52,16 @@ const handleLogout = () => {
       >
         Admin login
       </RouterLink>
+      <a
+        v-for="service in serviceLinks"
+        :key="service.name"
+        :href="service.url"
+        class="nav__button nav__button--external"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {{ service.name }}
+      </a>
       <button
         v-if="isAuthenticated && isAdminRoute"
         type="button"
@@ -105,6 +115,7 @@ const handleLogout = () => {
   justify-content: center;
   gap: 1rem;
   padding: 1.5rem 2rem 0.5rem;
+  flex-wrap: wrap;
 }
 
 .nav__button {
