@@ -128,6 +128,7 @@ const serviceLinks = computed(() => [
   { name: 'Speedtest Tracker', url: buildServiceUrl(8095) },
   { name: 'Mosquitto', url: buildServiceUrl(1883) },
   { name: 'Dozzle', url: buildServiceUrl(9999) },
+  { name: 'UpSnap', url: buildServiceUrl(8090) },
 ].filter((service) => service.url))
 
 let metricsStream = null
