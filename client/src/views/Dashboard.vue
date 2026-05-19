@@ -28,6 +28,22 @@
       </div>
     </section>
 
+    <section class="services-section">
+      <h2>Usługi</h2>
+      <div class="services-links">
+        <a
+          v-for="service in serviceLinks"
+          :key="service.name"
+          :href="service.url"
+          class="service-link"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {{ service.name }}
+        </a>
+      </div>
+    </section>
+
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
   </div>
 </template>
@@ -85,6 +101,34 @@ const historyConfig = ref({
 
 const STREAM_ENDPOINT = '/api/metrics/stream'
 const FALLBACK_POLL_INTERVAL_MS = 5000
+
+const getBaseOrigin = () => {
+  if (typeof window === 'undefined') return ''
+
+  try {
+    return new URL(window.location.href).origin
+  } catch (error) {
+    return window.location.origin ?? ''
+  }
+}
+
+const buildServiceUrl = (port, protocol = 'http:') => {
+  const origin = getBaseOrigin()
+  if (!origin) return ''
+
+  const parsedOrigin = new URL(origin)
+  return `${protocol}//${parsedOrigin.hostname}:${port}`
+}
+
+const serviceLinks = computed(() => [
+  { name: 'Portainer', url: buildServiceUrl(9443, 'https:') },
+  { name: 'Pi-hole', url: buildServiceUrl(8081) },
+  { name: 'Node-RED', url: buildServiceUrl(1880) },
+  { name: 'Uptime Kuma', url: buildServiceUrl(3001) },
+  { name: 'Speedtest Tracker', url: buildServiceUrl(8095) },
+  { name: 'Mosquitto', url: buildServiceUrl(1883) },
+  { name: 'Dozzle', url: buildServiceUrl(9999) },
+].filter((service) => service.url))
 
 let metricsStream = null
 let fallbackIntervalId = null
@@ -833,6 +877,37 @@ h1 {
   height: 100% !important;
 }
 
+
+.services-section {
+  background: #ffffff;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 10px 25px -15px rgba(15, 23, 42, 0.3);
+}
+
+.services-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.service-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1rem;
+  border-radius: 999px;
+  background: #0f766e;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.service-link:hover {
+  background: #0d9488;
+}
+
 .error {
   color: #b91c1c;
   text-align: center;
@@ -844,7 +919,8 @@ h1 {
   }
 
   .card,
-  .chart-section {
+  .chart-section,
+  .services-section {
     background: #0f172a;
     box-shadow: 0 10px 25px -20px rgba(15, 23, 42, 0.9);
   }
@@ -858,6 +934,11 @@ h1 {
   .card .description,
   .chart-section p {
     color: #cbd5f5;
+  }
+
+  .service-link {
+    background: #0f766e;
+    color: #f8fafc;
   }
 
   .error {
