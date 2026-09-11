@@ -10,8 +10,13 @@ services:
       - MQTT_BROKER_PORT=1883
       - MQTT_SENSOR_TOPIC_PREFIX=roompi/sensors
       - MQTT_DEVICE_TOPIC_PREFIX=roompi/devices
-      - MQTT_USERNAME=hauser
-      - MQTT_PASSWORD=Kowies1234
+      - MQTT_USERNAME=${MQTT_USERNAME}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - SENSOR_API_KEY=${SENSOR_API_KEY}
+      - API_ALLOWED_ORIGINS=${API_ALLOWED_ORIGINS:-}
     ports:
       - "3000:3000"
     volumes:

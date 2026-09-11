@@ -31,10 +31,16 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `MQTT_USERNAME` (opcjonalnie, np. `hauser`)
 - `MQTT_PASSWORD` (opcjonalnie, hasło do brokera)
 - `SWITCH_TOGGLE_COOLDOWN_SECONDS` (domyślnie `2`; minimalny odstęp między zmianami stanu przełącznika, chroniący światło przed szybkim włączaniem i wyłączaniem)
-- `ADMIN_USERNAME` (domyślnie `michalx106`)
-- `ADMIN_PASSWORD` (domyślnie `Kowies1234`)
-- `JWT_SECRET` (domyślnie `change-me-in-production` - ustaw własny w produkcji)
+- `ADMIN_USERNAME` (**wymagane**; nie ma domyślnej nazwy użytkownika)
+- `ADMIN_PASSWORD` (**wymagane**; nie ma domyślnego hasła)
+- `JWT_SECRET` (**wymagane**, co najmniej 32 znaki; użyj losowej wartości)
 - `JWT_EXPIRE_MINUTES` (domyślnie `120`)
+- `SENSOR_API_KEY` (wymagany do bezpośrednich aktualizacji stanu sensorów przez HTTP; przekazuj w nagłówku `X-Sensor-Api-Key`)
+- `API_ALLOWED_ORIGINS` (opcjonalna, rozdzielona przecinkami lista dozwolonych originów CORS; pozostaw puste dla frontendu pod tym samym originem)
+- `LOGIN_MAX_ATTEMPTS` (domyślnie `5`; maksymalna liczba nieudanych prób logowania z jednego IP)
+- `LOGIN_WINDOW_SECONDS` (domyślnie `900`; okno limitu logowania)
+
+`ADMIN_USERNAME`, `ADMIN_PASSWORD` i `JWT_SECRET` są wymagane do logowania administratora. Bez nich backend nadal udostępnia bezpieczne, tylko do odczytu dane i strumienie, ale logowanie oraz wszystkie chronione zapisy są zablokowane. Dzięki temu brak konfiguracji sekretów nie przerywa widoku urządzeń.
 
 ## API
 
@@ -43,8 +49,8 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `GET /api/metrics/history`
 - `GET /api/metrics/stream` (SSE)
 - `GET /api/devices`
-- `POST /api/devices/{id}/actions`
-- `POST /api/devices/{id}/state` (aktualizacja stanu sensora)
+- `POST /api/devices/{id}/actions` (wymaga `Authorization: Bearer <token>` admina)
+- `POST /api/devices/{id}/state` (aktualizacja stanu sensora, wymaga `X-Sensor-Api-Key`)
 - `POST /api/admin/devices` (dodanie urządzenia, wymaga `Authorization: Bearer <token>`)
 - `PUT /api/admin/devices/{id}` (edycja urządzenia, wymaga `Authorization: Bearer <token>`)
 - `DELETE /api/admin/devices/{id}` (usunięcie urządzenia, wymaga `Authorization: Bearer <token>`)
@@ -53,6 +59,20 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 
 - Po zmianie stanu urządzenia typu `switch` backend odrzuca kolejną zmianę stanu przez czas określony w `SWITCH_TOGGLE_COOLDOWN_SECONDS` (HTTP `429`).
 - Ponowienie żądania ustawiającego już aktywny stan jest bezpieczne i nie uruchamia ponownie okresu ochronnego.
+
+### Konfiguracja produkcyjna
+
+Nie zapisuj sekretów w `docker-compose.yml` ani w repozytorium. Przed uruchomieniem stacku ustaw je w środowisku (lub w nieśledzonym pliku `.env`):
+
+```bash
+export ADMIN_USERNAME='admin'
+export ADMIN_PASSWORD='use-a-long-unique-password'
+export JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+export SENSOR_API_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+docker compose up --build -d
+```
+
+Endpoint logowania jest ograniczony do pięciu nieudanych prób na IP w 15 minut (konfigurowalne). Wszystkie odpowiedzi API dostają nagłówki ograniczające osadzanie w ramkach, sniffing typu MIME i cache'owanie. CORS jest domyślnie wyłączony dla innych originów.
 
 ## Historia metryk
 
@@ -70,8 +90,8 @@ export MQTT_BROKER_HOST=127.0.0.1
 export MQTT_BROKER_PORT=1883
 export MQTT_SENSOR_TOPIC_PREFIX=roompi/sensors
 export MQTT_DEVICE_TOPIC_PREFIX=roompi/devices
-export MQTT_USERNAME=hauser
-export MQTT_PASSWORD=Kowies1234
+export MQTT_USERNAME='your-mqtt-user'
+export MQTT_PASSWORD='your-mqtt-password'
 ```
 
 2. Uruchom backend i Mosquitto.
