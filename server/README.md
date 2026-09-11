@@ -40,7 +40,7 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `LOGIN_MAX_ATTEMPTS` (domyślnie `5`; maksymalna liczba nieudanych prób logowania z jednego IP)
 - `LOGIN_WINDOW_SECONDS` (domyślnie `900`; okno limitu logowania)
 
-`ADMIN_USERNAME`, `ADMIN_PASSWORD` i `JWT_SECRET` są wymagane do logowania administratora. Bez nich backend nadal udostępnia bezpieczne, tylko do odczytu dane i strumienie, ale logowanie oraz wszystkie chronione zapisy są zablokowane. Dzięki temu brak konfiguracji sekretów nie przerywa widoku urządzeń.
+`ADMIN_USERNAME`, `ADMIN_PASSWORD` i `JWT_SECRET` są wymagane przy starcie. Aplikacja nie uruchomi się bez nich, aby przypadkowo nie wystawić znanych danych logowania.
 
 ## API
 

@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from auth_py import authenticate_admin, require_admin, require_sensor_api_key
-from config_py import API_ALLOWED_ORIGINS, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SECONDS, admin_auth_is_configured
+from config_py import API_ALLOWED_ORIGINS, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SECONDS, validate_security_configuration
 from device_service_py import DEVICE_SERVICE, DeviceActionValidationError
 from metrics_service_py import gather_metrics, metrics_history, sample_loop, subscribe
 from mqtt_bridge_py import MQTT_BRIDGE
@@ -36,6 +36,7 @@ class LoginPayload(BaseModel):
 
 @app.on_event("startup")
 async def startup_event():
+    validate_security_configuration()
     asyncio.create_task(sample_loop())
     MQTT_BRIDGE.start()
 
@@ -64,14 +65,6 @@ async def add_security_headers_and_limit_request_size(request: Request, call_nex
 
 @app.post("/api/admin/login")
 async def post_admin_login(payload: LoginPayload, request: Request):
-    # Telemetry remains available when a new installation has not configured
-    # secrets yet; administrative access remains fail-closed.
-    if not admin_auth_is_configured():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Logowanie administratora nie zostało skonfigurowane.",
-        )
-
     client_ip = request.client.host if request.client else "unknown"
     now = monotonic()
     attempts = _login_attempts[client_ip]
