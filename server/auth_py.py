@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from hmac import compare_digest
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from config_py import ADMIN_PASSWORD, ADMIN_USERNAME, JWT_ALGORITHM, JWT_EXPIRE_MINUTES, JWT_SECRET, SENSOR_API_KEY
+from config_py import ADMIN_PASSWORD, ADMIN_USERNAME, JWT_ALGORITHM, JWT_EXPIRE_MINUTES, JWT_SECRET
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -22,9 +21,7 @@ def create_access_token(username: str) -> str:
 
 
 def authenticate_admin(username: str, password: str) -> str | None:
-    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
-        return None
-    if not compare_digest(username, ADMIN_USERNAME) or not compare_digest(password, ADMIN_PASSWORD):
+    if username != ADMIN_USERNAME or password != ADMIN_PASSWORD:
         return None
     return create_access_token(username)
 
@@ -38,13 +35,7 @@ def decode_access_token(token: str) -> dict:
             detail="Nieprawidłowy lub wygasły token.",
         ) from exc
 
-    if not isinstance(payload, dict) or not payload.get("sub") or not ADMIN_USERNAME:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nieprawidłowy token.",
-        )
-
-    if not compare_digest(str(payload["sub"]), ADMIN_USERNAME):
+    if not isinstance(payload, dict) or not payload.get("sub"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Nieprawidłowy token.",
@@ -62,12 +53,3 @@ def require_admin(credentials: HTTPAuthorizationCredentials = Depends(bearer_sch
 
     payload = decode_access_token(credentials.credentials)
     return str(payload["sub"])
-
-
-def require_sensor_api_key(sensor_api_key: str | None = Header(default=None)) -> None:
-    """Allow direct sensor writes only from an explicitly provisioned producer."""
-    if not SENSOR_API_KEY or not sensor_api_key or not compare_digest(sensor_api_key, SENSOR_API_KEY):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nieprawidłowy klucz urządzenia.",
-        )
