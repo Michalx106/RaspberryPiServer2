@@ -30,6 +30,7 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `MQTT_DEVICE_TOPIC_PREFIX` (domyślnie `roompi/devices`)
 - `MQTT_USERNAME` (opcjonalnie, np. `hauser`)
 - `MQTT_PASSWORD` (opcjonalnie, hasło do brokera)
+- `SWITCH_TOGGLE_COOLDOWN_SECONDS` (domyślnie `2`; minimalny odstęp między zmianami stanu przełącznika, chroniący światło przed szybkim włączaniem i wyłączaniem)
 - `ADMIN_USERNAME` (domyślnie `michalx106`)
 - `ADMIN_PASSWORD` (domyślnie `Kowies1234`)
 - `JWT_SECRET` (domyślnie `change-me-in-production` - ustaw własny w produkcji)
@@ -47,6 +48,11 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 - `POST /api/admin/devices` (dodanie urządzenia, wymaga `Authorization: Bearer <token>`)
 - `PUT /api/admin/devices/{id}` (edycja urządzenia, wymaga `Authorization: Bearer <token>`)
 - `DELETE /api/admin/devices/{id}` (usunięcie urządzenia, wymaga `Authorization: Bearer <token>`)
+
+### Ochrona przełączników
+
+- Po zmianie stanu urządzenia typu `switch` backend odrzuca kolejną zmianę stanu przez czas określony w `SWITCH_TOGGLE_COOLDOWN_SECONDS` (HTTP `429`).
+- Ponowienie żądania ustawiającego już aktywny stan jest bezpieczne i nie uruchamia ponownie okresu ochronnego.
 
 ## Historia metryk
 

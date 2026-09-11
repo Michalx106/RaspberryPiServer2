@@ -63,6 +63,45 @@ def test_update_state_rejects_non_sensor_device(tmp_path: Path):
         service.update_state("lamp", {"state": {"on": True}})
 
 
+def test_switch_rejects_rapid_state_changes(tmp_path: Path):
+    devices_path = tmp_path / "devices.json"
+    devices_path.write_text(
+        json.dumps([{"id": "lamp", "type": "switch", "state": {"on": False}}]),
+        encoding="utf-8",
+    )
+    now = [100.0]
+    service = DeviceService(devices_path, switch_toggle_cooldown_seconds=2, clock=lambda: now[0])
+
+    assert service.apply_action("lamp", {"on": True})["state"]["on"] is True
+
+    with pytest.raises(DeviceActionValidationError) as exc_info:
+        service.apply_action("lamp", {"on": False})
+
+    assert exc_info.value.status_code == 429
+    assert "protect the light" in exc_info.value.message
+    assert service.list_devices()[0]["state"]["on"] is True
+
+    now[0] += 2
+    assert service.apply_action("lamp", {"on": False})["state"]["on"] is False
+
+
+def test_repeating_switch_state_does_not_restart_cooldown(tmp_path: Path):
+    devices_path = tmp_path / "devices.json"
+    devices_path.write_text(
+        json.dumps([{"id": "lamp", "type": "switch", "state": {"on": False}}]),
+        encoding="utf-8",
+    )
+    now = [100.0]
+    service = DeviceService(devices_path, switch_toggle_cooldown_seconds=2, clock=lambda: now[0])
+
+    service.apply_action("lamp", {"on": True})
+    now[0] += 1
+    assert service.apply_action("lamp", {"on": True})["state"]["on"] is True
+
+    now[0] += 1
+    assert service.apply_action("lamp", {"on": False})["state"]["on"] is False
+
+
 def test_subscribe_stream_receives_device_updates(tmp_path: Path):
     devices_path = tmp_path / "devices.json"
     devices_path.write_text(

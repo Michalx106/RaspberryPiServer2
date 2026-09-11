@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+from math import isfinite
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
-from typing import AsyncIterator
+from time import monotonic
+from typing import AsyncIterator, Callable
 
-from config_py import DEVICES_FILE_PATH
+from config_py import DEVICES_FILE_PATH, SWITCH_TOGGLE_COOLDOWN_SECONDS
 
 
 @dataclass
@@ -18,11 +20,22 @@ class DeviceActionValidationError(Exception):
 
 
 class DeviceService:
-    def __init__(self, devices_path: Path):
+    def __init__(
+        self,
+        devices_path: Path,
+        switch_toggle_cooldown_seconds: float = SWITCH_TOGGLE_COOLDOWN_SECONDS,
+        clock: Callable[[], float] = monotonic,
+    ):
+        if not isfinite(switch_toggle_cooldown_seconds) or switch_toggle_cooldown_seconds < 0:
+            raise ValueError("Switch toggle cooldown must be a non-negative finite number")
+
         self._lock = RLock()
         self._devices_path = devices_path
         self._devices = []
         self._subscribers = set()
+        self._switch_toggle_cooldown_seconds = switch_toggle_cooldown_seconds
+        self._clock = clock
+        self._last_switch_state_change = {}
         self._load()
 
     def _load(self):
@@ -186,11 +199,28 @@ class DeviceService:
             if dtype == "switch":
                 action = payload.get("action")
                 if action == "toggle":
-                    state["on"] = not bool(state.get("on", False))
+                    requested_on = not bool(state.get("on", False))
                 elif isinstance(payload.get("on"), bool):
-                    state["on"] = payload["on"]
+                    requested_on = payload["on"]
                 else:
                     raise DeviceActionValidationError('Switch actions require {"action":"toggle"} or {"on": boolean}')
+
+                if requested_on != bool(state.get("on", False)):
+                    now = self._clock()
+                    last_change = self._last_switch_state_change.get(device_id)
+                    remaining = (
+                        self._switch_toggle_cooldown_seconds - (now - last_change)
+                        if last_change is not None
+                        else 0
+                    )
+                    if remaining > 0:
+                        raise DeviceActionValidationError(
+                            "Switch can be changed again in "
+                            f"{remaining:.1f} seconds to protect the light from rapid switching",
+                            429,
+                        )
+                    state["on"] = requested_on
+                    self._last_switch_state_change[device_id] = now
 
             elif dtype == "dimmer":
                 level = payload.get("level")
