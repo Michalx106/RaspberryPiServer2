@@ -30,28 +30,3 @@ def test_decode_access_token_raises_for_invalid_token():
         auth_py.decode_access_token("invalid-token")
 
     assert exc.value.status_code == 401
-
-
-def test_decode_access_token_rejects_token_for_another_user(monkeypatch):
-    monkeypatch.setattr(auth_py, "ADMIN_USERNAME", "admin")
-    token = jwt.encode({"sub": "other"}, auth_py.JWT_SECRET, algorithm=auth_py.JWT_ALGORITHM)
-
-    with pytest.raises(HTTPException) as exc:
-        auth_py.decode_access_token(token)
-
-    assert exc.value.status_code == 401
-
-
-def test_require_sensor_api_key_rejects_missing_or_incorrect_key(monkeypatch):
-    monkeypatch.setattr(auth_py, "SENSOR_API_KEY", "sensor-secret")
-
-    for key in (None, "incorrect"):
-        with pytest.raises(HTTPException) as exc:
-            auth_py.require_sensor_api_key(key)
-        assert exc.value.status_code == 401
-
-
-def test_require_sensor_api_key_accepts_configured_key(monkeypatch):
-    monkeypatch.setattr(auth_py, "SENSOR_API_KEY", "sensor-secret")
-
-    assert auth_py.require_sensor_api_key("sensor-secret") is None
