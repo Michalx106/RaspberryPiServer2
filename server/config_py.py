@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -20,8 +21,42 @@ MQTT_USERNAME = os.environ.get("MQTT_USERNAME")
 MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD")
 SWITCH_TOGGLE_COOLDOWN_SECONDS = float(os.environ.get("SWITCH_TOGGLE_COOLDOWN_SECONDS", "2"))
 
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "michalx106")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Kowies1234")
-JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")
+# Credentials must be supplied by the deployment.  In particular, never add a
+# fallback password here: this module is imported by the web server as well as
+# by background workers.
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
+# A process-local fallback makes an accidentally unconfigured instance unable
+# to validate tokens created after a restart.  Startup validation below still
+# rejects such a deployment rather than silently using a known secret.
+JWT_SECRET = os.environ.get("JWT_SECRET") or secrets.token_urlsafe(48)
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", 120))
+
+SENSOR_API_KEY = os.environ.get("SENSOR_API_KEY")
+API_ALLOWED_ORIGINS = tuple(
+    origin.strip() for origin in os.environ.get("API_ALLOWED_ORIGINS", "").split(",") if origin.strip()
+)
+LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", 5))
+LOGIN_WINDOW_SECONDS = int(os.environ.get("LOGIN_WINDOW_SECONDS", 900))
+
+
+def validate_security_configuration() -> None:
+    missing = [
+        name
+        for name, value in {
+            "ADMIN_USERNAME": ADMIN_USERNAME,
+            "ADMIN_PASSWORD": ADMIN_PASSWORD,
+            "JWT_SECRET": os.environ.get("JWT_SECRET"),
+        }.items()
+        if not value
+    ]
+    if missing:
+        raise RuntimeError(f"Missing required security configuration: {', '.join(missing)}")
+
+    if len(JWT_SECRET) < 32:
+        raise RuntimeError("JWT_SECRET must contain at least 32 characters")
+    if JWT_EXPIRE_MINUTES <= 0:
+        raise RuntimeError("JWT_EXPIRE_MINUTES must be greater than zero")
+    if LOGIN_MAX_ATTEMPTS <= 0 or LOGIN_WINDOW_SECONDS <= 0:
+        raise RuntimeError("Login rate-limit settings must be greater than zero")
